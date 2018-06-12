@@ -1,0 +1,40 @@
+BLOCK MODSEL
+     1     1                # msugra based
+    12     200              # output scale
+#
+BLOCK SMINPUTS
+     1     127.934          # alpha^(-1)
+     2       0.0000116637   # G_Fermi
+     3       0.1172         # alpha_s(MZ)
+     4      91.1876         # MZ(pole)
+     5       4.18           # mb(mb)
+     6     173.3            # mtop(pole)
+     7       1.77682        # mtau(pole)
+#
+BLOCK MINPAR
+     3          40          # tanb
+BLOCK EXTPAR
+     0           200        # Set MX=MSUSY
+     1           160        # M_1(MX)
+     2           310        # M_2(MX)
+     3           900        # M_3(MX)
+    11          -740        # At(MX)
+    12         -1000        # Ab(MX)
+    13          -200        # Atau(MX)
+    23           540        # mu(MX)
+    26           480        # mA(pole)
+    31           340        # meL(MX)
+    32           380        # mmuL(MX)
+    33           300        # mtauL(MX)
+    34           320        # meR(MX)
+    35           360        # mmuR(MX)
+    36           280        # mtauR(MX)
+    41           880        # mqL1(MX)
+    42           850        # mqL2(MX)
+    43           752        # mqL3(MX)
+    44           840        # muR(MX)
+    45           821        # mcR(MX)
+    46           666        # mtR(MX)
+    47           830        # mdR(MX)
+    48           818        # msR(MX)
+    49           762        # mbR(MX)

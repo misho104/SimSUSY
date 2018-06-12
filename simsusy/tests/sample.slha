@@ -1,0 +1,59 @@
+# TEST TARGET SLHA
+#
+
+BLOCK     ONEARGBLOCK    # COMMENT
+     1     10    # one
+     2    -20    # two
+     3      0    # three
+
+#   10     20    # comment
+
+    11   -1.5222e+3 ###      
+    12   +2.5E+2
+    13   +2.0d-2 #### FORTRAN DOUBLE   
+    14   -3.0D-3            
+
+BLOCK     NOARGBLOCKA  Q = 123456.789
+    3.1415926535
+
+BLOCK     NOARGBLOCKB  Q = 123456.789
+    0
+
+BLOCK   doubleArgBlock
+   1  1      1
+   1  2      2
+   2  1      2
+   2  2      4
+
+BLOCK unusualcase
+   1    some calculator returns # hogehoge
+   2    these kind of error messages # hogehoge
+   3    which of course is not expected in slha format.
+
+#
+bLocK mass
+   6    175       #
+#
+#         PDG            Width
+DECAY         6     1.45899677E+00   # top decays
+#          BR         NDA      ID1       ID2
+     1.00000000E+00    2           5        24   # BR(t ->  b    W+)
+#
+#         PDG            Width
+DECAY   1000021     1.34988503E+01   # gluino decays
+#          BR         NDA      ID1       ID2
+     2.17368689E-02    2     1000001        -1   # BR(~g -> ~d_L  db)
+     2.17368689E-02    2    -1000001         1   # BR(~g -> ~d_L* d )
+#
+DECAY   1000005     1.07363639E+01   # sbottom1 decays
+#          BR         NDA      ID1       ID2
+     2.59311849E-02    2     1000022         5   # BR(~b_1 -> ~chi_10 b )
+     2.16401445E-01    2     1000023         5   # BR(~b_1 -> ~chi_20 b )
+     1.59051554E-02    2     1000025         5   # BR(~b_1 -> ~chi_30 b )
+     1.27036617E-02    2     1000035         5   # BR(~b_1 -> ~chi_40 b )
+
+     1.00000000E-03    3     1 -2 -3         # artifitial multibody
+     2.00000000E-03    4     1 -2 -3 4       # artifitial multibody
+     3.00000000E-03    5     1 -2 -3 4 5     # artifitial multibody
+     4.00000000E-03    6     1 -2 -3 4 5 6   # artifitial multibody
+#
