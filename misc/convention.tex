@@ -1,0 +1,277 @@
+\documentclass[a4paper,11pt,captions=tableheading,DIV=12]{scrartcl}
+\pdfoutput=1
+
+% ----------------------------------------------------------- Packages
+\usepackage{amsmath,amssymb,url,cite,slashed,cancel,booktabs,graphicx,listings,subcaption}
+\usepackage[colorlinks=true,urlcolor=blue,citecolor=magenta]{hyperref}
+%%%UNUSED%%% \usepackage{feynmp,enumerate,multirow,wrapfig}
+\renewcommand\citepunct{,\penalty1000\hskip.13emplus.1emminus.1em\relax} % no line-break in \cite
+
+% MATH NOTATION
+\newcommand\w[1]{_{\mathrm{#1}}}
+\newcommand\vc[1]{{\boldsymbol{#1}}}
+\newcommand\dd{\mathrm{d}}
+\newcommand\ee{\mathrm{e}}
+\newcommand\ii{\mathrm{i}}
+\newcommand\pmat[1]{\begin{pmatrix}#1\end{pmatrix}}
+\newcommand\Order{\mathop{\mathcal{O}}}
+\newcommand\Br{\mathop{\mathrm{Br}}}
+\newcommand{\dn}[3]{\frac{\dd^#1 #2}{\dd #3^#1}}
+\newcommand{\pdn}[3]{\frac{\partial^#1 #2}{\partial #3^#1}}
+\newcommand{\pd}[2]{\frac{\partial #1}{\partial #2}}
+
+\newcommand\unit[1]{\,\mathrm{#1}}
+\newcommand\eV{\unit{eV}}
+\newcommand\keV{\unit{keV}}
+\newcommand\MeV{\unit{MeV}}
+\newcommand\GeV{\unit{GeV}}
+\newcommand\TeV{\unit{TeV}}
+\newcommand\fb{\unit{fb}}
+\newcommand\pb{\unit{pb}}
+\newcommand\iab{\unit{ab^{-1}}}
+\newcommand\ifb{\unit{fb^{-1}}}
+\newcommand\ipb{\unit{pb^{-1}}}
+\newcommand\fm{\unit{fm}}
+
+\makeatletter
+\def\EE{\@ifnextchar-{\@@EE}{\@EE}}
+\def\@EE#1{\ifnum#1=1 \times\!10 \else \times\!10^{#1}\fi}
+\def\@@EE#1#2{\times\!10^{-#2}}
+\makeatother
+
+\newcommand{\fracp}[3]{\ifnum1=#3\relax\biggl(\frac{#1}{#2}\biggr)\else\biggl(\frac{#1}{#2}\biggr)^{#3}\fi}
+\newcommand{\neut}[1][]{{\tilde\chi^0_{#1}}}
+\newcommand{\chrg}[1][]{{\tilde\chi^\pm_{#1}}}
+\newcommand{\chrgP}[1][]{{\tilde\chi^+_{#1}}}
+\newcommand{\chrgM}[1][]{{\tilde\chi^-_{#1}}}
+
+\lstset{columns=[l]fullflexible,basicstyle=\small\ttfamily,xleftmargin=2em,frame=L,keepspaces=true}
+\bibliographystyle{utphys27mod}
+
+% ---------------------------------------------------- For Sho's Notes
+\usepackage{scrlayer-scrpage,color,soul}
+\usepackage[hhmmss]{datetime}
+\newdateformat{mydate}{\THEDAY\;\shortmonthname.\;\THEYEAR}
+\addtokomafont{pagehead}{\small\normalfont}
+\rohead*{\texttt{[\jobname~@~\mydate\today~\currenttime]}}
+
+\newcommand{\TODO}[1]{\begingroup\color{red}\textbf{$\clubsuit$#1$\clubsuit$}\endgroup}
+
+\title{SLHA convention compared against References}
+\author{Sho Iwamoto}
+\date{}
+\newcommand{\wL}{_{\mathrm L}}
+\newcommand{\wR}{_{\mathrm R}}
+\newcommand{\bU}{\bar U}
+\newcommand{\bD}{\bar D}
+\newcommand{\bE}{\bar E}
+\newcommand{\tra}{^{\mathrm T}}
+\begin{document}
+\maketitle
+%---------------------------------------------------------------------
+
+\subsection{Higgs potential}
+
+\subsubsection{SLHA convention}
+The SLHA~\cite{SLHA} is based on Gunion--Haber's notation~\cite{GH}:
+\begin{align}
+\begin{split}
+  W &\supset-\epsilon_{ab}
+ \mu H_1^aH_2^b
+ \\&=-\mu(H_1^1H_2^2-H_1^2H_2^1)
+ \\&\equiv \mu(-H_1^0H_2^0+H_1^-H_2^+),
+\end{split}
+ \tag{SLHA:3}\\
+\begin{split}
+  V_2 &\supset
+  m_{H_{1}}^{2}|H_1|^2
+ + m_{H_{2}}^{2}|H_2|^2
+ - (m_3^2\epsilon_{ab}H_1^aH_2^b +\text{h.c.}),
+\\
+&=
+  m_{H_{1}}^{2}|H_1|^2
+ + m_{H_{2}}^{2}|H_2|^2
++ \left[m_3^2 (-H_1^0H_2^0+H_1^-H_2^+) +\text{h.c.}\right].
+\end{split}
+ \tag{SLHA:7}
+\end{align}
+where $\epsilon_{12}=\epsilon^{12}=+1$.
+The parameter $m_A^2$, set by \texttt{EXTPAR 24}, is then defined as
+\begin{equation}
+ m_A^2 = \frac{2m_3^2}{\sin2\beta}.
+\tag{SLHA:8}
+\end{equation}
+
+\subsubsection{Comparison to GH convention}
+In Gunion--Haber~\cite{GH}, the definitions are as follows, with their errata applied:
+\begin{align}
+ W &\supset -\epsilon_{ab}\mu H_1^aH_2^b,\tag{GH:3.3--3.4}
+\\
+V\w{soft}&\supset m_1^2|H_1|^2 + m_2^2 |H_2|^2 - (m_{12}^2\epsilon_{ab}H_1^a H_2^b+\text{h.c.}),
+\tag{GH:3.9}
+%
+\end{align}
+where $\bE\equiv\tilde R$ in their notation, with the same definition $\epsilon_{12}=1$ (found below Eq.~(3.2)).
+So, with the identification $(m_1^2,m_2^2,m_{12}^2)\equiv(m_{H_1}^2,m_{H_2}^2,m_3^2)$, this is identical to SLHA convention.
+Also we note
+\begin{align}
+ \langle H_1\rangle &= \pmat{v_1\\0},&
+ \langle H_2\rangle &= \pmat{0\\v_2},
+\tag{GH:3.7}
+\end{align}
+with $v_1>0$, $v_2>0$ (3.24), and $\tan\beta=v_2/v_1$ (2.8).
+
+We can then use their results, which say
+\begin{align}
+ &m_{H_1}^2 = -|\mu|^2 + 2\lambda_1 v_2^2 - m_Z^2/2,
+\tag{GH:3.21c}
+\\
+ &m_{H_2}^2 = -|\mu|^2 + 2\lambda_1 v_1^2 - m_Z^2/2,
+\tag{GH:3.21d}
+\\
+ &m_{H_1}^2 + m_{H_2}^2 + 2|\mu|^2 
+= m_{3}^2(\tan\beta+\cot\beta)
+= \frac{2m_{3}^2}{\sin2\beta},
+\tag{GH:3.22}
+\end{align}
+and, noting that
+\begin{align}
+ m_Z^2&=(g^2+g'^2)(v_1^2+v_2^2)/2,&
+ m_W^2&=g^2(v_1^2+v_2^2)/2,
+\end{align}
+which are found below Eq.~(3.19),
+\begin{equation}
+ \lambda_1
+= \frac{g^2+g'^2}{4} + \frac{m_3^2}{2v_1v_2}
+= \frac{m_Z^2}{2(v_1^2+v_2^2)} + \frac{m_3^2}{2v_1v_2};
+\end{equation}
+combining them, we have
+\begin{align}
+ m_{H_1}^2&=-|\mu|^2-\frac{m_Z^2}{2}\cos2\beta + m_3^2\tan\beta,\\
+ m_{H_2}^2&=-|\mu|^2+\frac{m_Z^2}{2}\cos2\beta + m_3^2\cot\beta.
+\end{align}
+Also the Higgs parameters are given by
+\begin{align}
+ m_{H^\pm}^2&=(4\lambda_1-g'^2)(v_1^2+v_2^2)=m_W^2+m_A^2,\tag{GH:3.16}\\
+ m_{H_3^0}^2&=m_{H^\pm}^2-m_W^2=m_A^2,\tag{GH:3.17}\\
+ m_{H_1^0,H_2^0}^2 &=
+ \frac12\left[m_{H_3^0}^2+m_Z^2\pm\sqrt{
+ (m_{H_3^0}^2+m_Z^2)^2-4m_Z^2 m_{H_3^0}^2\cos^22\beta
+}\right],\tag{GH:3.18}\\
+\tan2\alpha&=\frac{m^2_{H_3^0}+m_Z^2}{m_{H_3^0}^2-m_Z^2}\tan2\beta\tag{GH:3.19}.
+\end{align}
+
+\subsubsection{Comparison to SUSY Primer convention}
+We here compare the SLHA/GH notation with Martin's SUSY primer.
+The potentials are given by
+\begin{align}
+ W\w{MSSM}
+&\supset
+ \mu H\w u H\w d 
+\equiv
+\mu (H_2^+H_1^- - H_1^0H_2^0),\tag{SP:6.1.1--3}\\
+%
+\begin{split}
+-\mathcal L\w{soft}&\supset
+  m_{H\w d}^{2}|H\w d|^2
+ + m_{H\w u}^{2}|H\w u|^2
+ + (b\epsilon^{ab}H\w u^aH\w d^b +\text{h.c.}),
+\end{split}\tag{SP:6.3.1}
+%
+% (|\mu|^2+{m^2_{H\w u}})|H_u|^2
+%+(|\mu|^2+{m^2_{H\w d}})|H_d|^2
+%+\left(b(H\w u^+H\w d^- - H\w u^0 H\w d^0)+\text{c.c.}\right),\tag{SP:8.1.1}
+\end{align}
+where $\epsilon^{12}=+1$ (2.13).
+So the parameters are identified by the replacement
+\begin{align}
+\mu&=\mu,\\
+m_3^2&=b,
+\\
+m_{H_1}^2 &= m_{H\w d}^2,
+\\
+m_{H_2}^2 &= m_{H\w u}^2,
+\end{align}
+where the LHS are the SLHA parameters and the RHS are those in SUSY primer.
+With this identification, we can confirm that the above-shown formulae agree with SUSY Primer's equations (8.1.8)--(8.1.11) and (8.1.19)--(8.1.22).
+
+
+
+\subsection{Interaction terms}
+Here, to simplify the notation, we omit the SU(2) indices with assuming
+\begin{equation*}
+ AB=-BA\equiv A^1B^2-B^1A^2.
+\end{equation*}
+\subsubsection{SLHA convention}
+The SLHA~\cite{SLHA} convention for the interection terms are
+\begin{align}
+ W &=
+ - H_2 QY_U\bU
+ + H_1 QY_D\bD
+ + H_1 LY_E\bE,
+\tag{SLHA:3}\\
+ V_3 &=
+ - H_2 \tilde Q T_U \tilde u^*
+ + H_1 \tilde Q T_D \tilde d^*
+ + H_1 \tilde L T_E \tilde e^*
+\tag{SLHA:5}\\
+ V_2 &=
+  \tilde Q^*m_{Q}^{2} \tilde Q
+ + \tilde L^*m_{L}^{2} \tilde L
+ + \tilde u  m_{u}^{2} \tilde u^*
+ + \tilde d  m_{d}^{2} \tilde d^*
+ + \tilde e  m_{e}^{2} \tilde e^*
+\tag{SLHA:7}\\
+ \mathcal L_G &= \frac{M_1}{2}\tilde b\tilde b+\frac{M_2}{2}\tilde w\tilde w+\frac{M_3}{2}\tilde g\tilde g + \text{h.c.}
+\tag{SLHA:9}
+\end{align}
+
+
+\subsubsection{Comparison to SUSY Primer convention}
+In SUSY primer, the interaction terms are defined by
+\begin{align}
+ W\w{MSSM}
+&\supset \bar U y_u Q H\w u - \bar d y_d Q H\w d - \bar e y_e L H\w d
+\tag{SP:6.1.1}\\
+&=
+ -H_2Q y_u\tra \bar U + H_1 Qy_d\tra\bar d  +H_1 Ly_e\tra\bar e
+\notag\\
+V_3 &=
+ \tilde u^* a_u \tilde Q H\w u
+-\tilde d^* a_d \tilde Q H\w d
+-\tilde e^* a_e \tilde L H\w d
+\notag\\
+&=
+-H_2 \tilde Q a_u\tra \tilde u^*
++H_1 \tilde Q a_d\tra \tilde d^*
++H_1 \tilde L a_e\tra \tilde e^*
+\notag\\
+V_2 &\supset
+ \tilde Q^* m_Q^2 \tilde Q
++\tilde L^* m_L^2 \tilde L
++\tilde u^* m_u^2 \tilde u
++\tilde d^* m_d^2 \tilde d
++\tilde e^* m_e^2 \tilde e
+\notag\\
+&=
+ \tilde Q^* m_Q^2 \tilde Q
++\tilde L^* m_L^2 \tilde L
++\tilde u (m_u^2)\tra \tilde u^*
++\tilde d (m_d^2)\tra \tilde d^*
++\tilde e (m_e^2)\tra \tilde e^*
+\notag\\
+\mathcal L&\supset
+-\frac{M_1}{2}\tilde b\tilde b-\frac{M_2}{2}\tilde w\tilde w-\frac{M_3}{2}\tilde g\tilde g + \text{h.c.}.\tag{SP:8.1.1}
+\end{align}
+So the notations can be matched with
+\begin{align}
+ Y_U, Y_D, Y_E &= y_u\tra, y_d\tra, y_e\tra\\
+ T_U, T_D, T_E &= a_u\tra, a_d\tra, y_e\tra\\
+ m_Q^2, m_L^2  &= m_Q^2, m_L^2\\
+ m_u^2, m_d^2, m_e^2  &= (m_u^2)\tra,(m_d^2)\tra,(m_e^2)\tra,\\
+ M_1, M_2, M_3 &= -M_1, -M_2, -M_3,
+\end{align}
+where the LHS are the SLHA parameters and the RHS are those in SUSY primer.
+
+
+\end{document}
