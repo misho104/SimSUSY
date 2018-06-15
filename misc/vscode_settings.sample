@@ -1,0 +1,44 @@
+{
+  "python.autoComplete.extraPaths": [
+  ],
+  "python.autoComplete.addBrackets": true,
+  "python.autoComplete.preloadModules": ["numpy"],
+  "cSpell.words": [
+    "ewsb",
+    "gaugino",
+    "higgs",
+    "isnan",
+    "masq",
+    "mathematica",
+    "modsel",
+    "mssm",
+    "ndarray",
+    "noargblocka",
+    "noargblockb",
+    "noqa",
+    "numpy",
+    "pyslha",
+    "qextpar",
+    "sfermion",
+    "simsusy",
+    "slha",
+    "sminputs",
+    "sugra",
+    "tdin",
+    "tein",
+    "tuin",
+    "upmns",
+    "upmnsin",
+    "vckm",
+    "vckmin"
+  ],
+  "python.unitTest.nosetestArgs": ["-s", "."],
+  "python.unitTest.pyTestEnabled": false,
+  "python.unitTest.unittestEnabled": false,
+  "python.unitTest.nosetestsEnabled": true,
+  "files.exclude": {
+    ".coverage": true,
+    ".noseids": true,
+    "htmlcov": true
+  }
+}
