@@ -1,6 +1,6 @@
 import pyslha
 from typing import Dict, Optional, Sequence, List, Tuple, Union, Any, MutableMapping  # noqa: F401
-
+import numpy as np
 KeyType = Union[None, int, Tuple[int, int]]
 ValueType = Union[int, float, str, List[str]]   # SPINFO/DCINFO 3 and 4 may be multiple
 CommentType = str
@@ -30,12 +30,12 @@ def format_line(key: KeyType, value: ValueType, comment: CommentType='')->str:
     if isinstance(value, list):  # for SPINFO / DCINFO 3 and 4
         return '\n'.join([format_line(key, line) for line in value])
 
-    if isinstance(value, float):
+    if isinstance(value, float) or isinstance(value, np.float_):
         value_str = f'{value:16.8e}'
-    elif isinstance(value, int):
+    elif isinstance(value, int)or isinstance(value, np.int_):
         value_str = f'{value:>10}      '
     else:
-        value_str = value
+        value_str = f'{value:<16}'
     if isinstance(key, int):
         # (1x,I5,3x,1P,E16.8,0P,3x,'#',1x,A)
         return f' {key:>5}   {value_str}   {_comment_str(comment)}'
@@ -62,7 +62,7 @@ def writeSLHABlocks(blocks: MutableMapping[Tuple[str, ...], pyslha.Block], preci
         if b:
             lines.append(format_block_line(b.name, b.q))
             if b.name.upper() == 'MASS':
-                lines += [format_mass_line(k, b[k]) for k in sorted(b.keys())]
+                lines += [format_mass_line(k, b[k]) for k in _sorted_pid(b.keys())]
             else:
                 lines += [format_line(k, b[k]) for k in sorted(b.keys())]
             lines.append('\n')
@@ -81,3 +81,39 @@ def writeSLHADecays(decays: MutableMapping[int, pyslha.Particle], ignorenobr: bo
                 lines.append(f'   {d.br:16.8e}   {len(d.ids):>2}   {ids_str}  #\n')
         lines.append('\n')
     return ''.join(lines)
+
+
+def _sorted_pid(pids: List[int])->List[int]:
+    sm = list()      # type: List[int]
+    gluino = list()  # type: List[int]
+    up = list()      # type: List[int]
+    down = list()    # type: List[int]
+    n = list()       # type: List[int]
+    c = list()       # type: List[int]
+    lep = list()     # type: List[int]
+    nu = list()      # type: List[int]
+    others = list()  # type: List[int]
+    for i in pids:
+        j = i % 1000000
+        if i < 1000000:
+            sm.append(i)
+        elif i >= 3000000:
+            others.append(i)
+        elif i == 1000021:
+            gluino.append(i)
+        elif j <= 6:
+            if j % 2:
+                down.append(i)
+            else:
+                up.append(i)
+        elif i in [1000022, 1000023, 1000025, 1000035]:
+            n.append(i)
+        elif i in [1000024, 1000037]:
+            c.append(i)
+        elif j in [11, 13, 15]:
+            lep.append(i)
+        elif j in [12, 14, 16]:
+            nu.append(i)
+        else:
+            others.append(i)
+    return [i for a in [sm, gluino, up, down, n, c, lep, nu, others] for i in sorted(a)]

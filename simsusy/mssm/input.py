@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 class S(enum.Enum):
     """Object to represent the SLHA sfermion codes.
 
-    obj[0] : the numbers correspond to EXTPAR number minus 1-3.
+    obj[0] : the numbers correspond to EXTPAR/MSOFT number minus 1-3.
     obj[1] : SLHA2 input block name
     """
     QL = (40, 'MSQ2IN')
@@ -21,6 +21,10 @@ class S(enum.Enum):
     LL = (30, 'MSL2IN')
     ER = (33, 'MSE2IN')
 
+    def __init__(self, extpar, slha2_input):
+        self.extpar = extpar
+        self.slha2_input = slha2_input
+
 
 class A(enum.Enum):
     """Object to represent the SLHA A-term codes.
@@ -28,9 +32,15 @@ class A(enum.Enum):
     obj[0] : the numbers correspond to EXTPAR number.
     obj[1] : SLHA2 input block name.
     """
-    U = (11, 'TUIN')
-    D = (12, 'TDIN')
-    E = (13, 'TEIN')
+    U = (11, 'TUIN', 'AU', 'TU')
+    D = (12, 'TDIN', 'AD', 'TD')
+    E = (13, 'TEIN', 'AE', 'TE')
+
+    def __init__(self, extpar, slha2_input, out_a, out_t):
+        self.extpar = extpar
+        self.slha2_input = slha2_input
+        self.out_a = out_a
+        self.out_t = out_t
 
 
 class MSSMInput(AbsModel):
@@ -113,18 +123,24 @@ class MSSMInput(AbsModel):
             elif name == 'VCKMIN':
                 flag = 0  # any better way?
                 for k, v in content.items():
-                    if 1 <= k <= 4:
+                    if 1 <= k <= 3:
                         flag |= 2 ** (k - 1)
+                    elif k == 4 and v != 0:
+                        invalid.append((name, k, v, 0))
                     else:
                         ignore.append((name, k, v))
-                if flag & 7 != 7:  # CPV (VCKMIN 4) is not supported
+                if flag != 7:
                     invalid.append((name, 'parameter is missing'))
             elif name == 'UPMNSIN':
                 flag = 0
                 for k, v in content.items():
-                    if not 1 <= k <= 6:
+                    if 1 <= k <= 3:
+                        flag |= 2 ** (k - 1)
+                    elif 4 <= k <= 6 and v != 0:
+                        invalid.append((name, k, v, 0))
+                    else:
                         ignore.append((name, k, v))
-                if flag & 7 != 7:  # CPV (UPMNSIN 4-6) is not supported
+                if flag != 7:
                     invalid.append((name, 'parameter is missing'))
             elif name in ['MSQ2IN', 'MSU2IN', 'MSD2IN', 'MSL2IN', 'MSE2IN']:
                 for k, v in content.items():
@@ -190,9 +206,9 @@ class MSSMInput(AbsModel):
 
     def ms(self, species: S)->np.ndarray:
         m0 = self.get('MINPAR', 1)
-        value = np.diag([self.get('EXTPAR', species.value[0] + gen) or m0 for gen in [1, 2, 3]])
+        value = np.diag([self.get('EXTPAR', species.extpar + gen) or m0 for gen in [1, 2, 3]])
 
-        slha2block = self.block(species.value[1])
+        slha2block = self.block(species.slha2_input)
         if slha2block:
             for ix in range(1, 4):
                 for iy in range(ix, 4):
@@ -205,9 +221,9 @@ class MSSMInput(AbsModel):
     def a(self, species: A) -> np.ndarray:
         """Return A-term matrix, but only if T-matrix is not specified in the
         input; otherwise return None, and one should read T-matrix."""
-        a33 = self.get('EXTPAR', species.value[0]) or self.get('MINPAR', 5)
+        a33 = self.get('EXTPAR', species.extpar) or self.get('MINPAR', 5)
 
-        slha2block = self.block(species.value[1])
+        slha2block = self.block(species.slha2_input)
         if slha2block:
             for k, v in slha2block.items():
                 if v != 0:
@@ -218,7 +234,7 @@ class MSSMInput(AbsModel):
     def t(self, species: A) -> np.ndarray:
         """Return T-term matrix if T-matrix is specified; corresponding EXTPAR
         entry is ignored and thus (3,3) element must be always specified."""
-        slha2block = self.block(species.value[1])
+        slha2block = self.block(species.slha2_input)
         if not slha2block:
             return None
 
@@ -227,7 +243,7 @@ class MSSMInput(AbsModel):
             (x, y) = k
             matrix[x - 1, y - 1] = v
         if math.isnan(matrix[2, 2]):
-            ValueError(f'Block {species.value[1]} needs (3,3) element.')
+            ValueError(f'Block {species.slha2_input} needs (3,3) element.')
 
         return matrix
 

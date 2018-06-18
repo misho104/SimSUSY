@@ -15,7 +15,7 @@ unittest:
 
 typetest:
 	@echo "# Checking typing by mypy..."
-	mypy --ignore-missing-imports --follow-imports=silent .
+	mypy --ignore-missing-imports --follow-imports=silent --no-strict-optional .
 	@echo
 
 formattest:

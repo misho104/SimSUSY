@@ -1,4 +1,4 @@
-from nose.tools import raises, ok_, eq_
+from nose.tools import raises, ok_, eq_  # noqa: F401
 from simsusy.mssm.input import MSSMInput
 import pathlib
 import logging

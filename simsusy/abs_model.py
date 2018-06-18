@@ -18,6 +18,7 @@ class AbsModel:
     """Abstract model as a wrapper of a SLHA object."""
 
     def __init__(self, obj: Union[pyslha.Doc, str, None]=None)->None:
+        self._matrix_cache = dict()  # type: Dict[str, np.ndarray]
         if obj is None:
             self._slha = pyslha.Doc(blocks=pyslha._dict('Blocks'))
         elif isinstance(obj, pyslha.Doc):
@@ -93,10 +94,27 @@ class AbsModel:
         self.set('MASS', key, mass)
 
     def set_matrix(self, block_name: str, matrix: np.ndarray)->None:
+        self._matrix_cache[block_name] = matrix
         nx, ny = matrix.shape
         for i in range(0, nx):
             for j in range(0, ny):
                 self.set(block_name, (i + 1, j + 1), matrix[i, j])
+
+    def get_matrix(self, block_name: str)->np.ndarray:
+        cache = self._matrix_cache.get(block_name)
+        if cache:
+            return cache
+        block = self.block('NMIX')
+        if not block:
+            return np.array()
+        nx_ny = max(block.keys())
+        assert isinstance(nx_ny, tuple) and len(nx_ny) == 2 and all(isinstance(nx_ny[i], int) for i in nx_ny)
+        matrix = np.zeros(nx_ny)
+        for x in range(0, nx_ny[0]):
+            for y in range(0, nx_ny[1]):
+                matrix[x, y] = block.get((x, y), default=0)
+        self._matrix_cache[block_name] = matrix
+        return self._matrix_cache[block_name]
 
     def set_q(self, block_name, q: float):
         block_name = block_name.upper()

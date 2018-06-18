@@ -1,4 +1,4 @@
-from typing import Tuple, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, List, Optional  # noqa: F401
 if TYPE_CHECKING:
     from simsusy.mssm.input import MSSMInput  # noqa: F401
 
@@ -43,25 +43,39 @@ class AbsSMParameters():
 
     def gs(self) -> float: return NotImplemented
 
-    def mass(self, pid) -> Optional[float]:  # pole mass
+    def vev(self)->float: return NotImplemented
+
+    def mass(self, pid) ->float:  # pole mass
         if pid == 6:
             return self._mt
         elif pid == 11:
-            return self._me
+            return self._me or 0.511e-3  # TODO: improve
         elif pid == 13:
-            return self._mmu
+            return self._mmu or 0.105  # TODO: improve
         elif pid == 15:
-            return self._mtau
+            return self._mtau or 1.77  # TODO: improve
         elif pid == 12:
-            return self._mnu1
+            return self._mnu1 or 0.  # TODO: improve
         elif pid == 14:
-            return self._mnu2
+            return self._mnu2 or 0.  # TODO: improve
         elif pid == 16:
-            return self._mnu3
+            return self._mnu3 or 0.  # TODO: improve
         elif pid == 23:
             return self._mz
         else:
             return NotImplemented
+
+    def mass_u(self)->List[float]:
+        return [self.mass(i) for i in (2, 4, 6)]
+
+    def mass_d(self)->List[float]:
+        return [self.mass(i) for i in (1, 3, 5)]
+
+    def mass_e(self)->List[float]:
+        return [self.mass(i) for i in(11, 13, 15)]
+
+    def mass_n(self)->List[float]:
+        return [self.mass(i) for i in(12, 14, 16)]
 
 
 class AbsEWSBParameters():
@@ -105,3 +119,5 @@ class AbsEWSBParameters():
 
     def is_set(self)->bool:
         return self._count_unspecified_params() == 0
+
+    def alpha(self)->float: return NotImplemented
