@@ -48,40 +48,51 @@ class TestUtility(unittest.TestCase):
             self.__assert_sub(target[i] >= 0, 'Object not all-positive', a)
 
     def test_trigonometric_random(self):
+        sin_regions = [i * math.pi / 4 for i in [-2, -1, 0, 1, 2]]
+        cos_regions = [i * math.pi / 4 for i in [0, 1, 2, 3, 4]]
         for i in range(0, 4):
-            theta = random.uniform(i * math.pi / 2, (i + 1) * math.pi / 2)
+            # for sin2xxx and tan2xxx, where -pi/2 < theta < pi/2
+            theta = random.uniform(sin_regions[i], sin_regions[i + 1])
             sin = math.sin(theta)
             cos = math.cos(theta)
             tan = math.tan(theta)
             sin2 = math.sin(2 * theta)
             cos2 = math.cos(2 * theta)
+            tan2 = math.tan(2 * theta)
+            self.assertAlmostEqual(cos, u.sin2cos(sin))
+            self.assertAlmostEqual(tan, u.sin2tan(sin))
+            self.assertAlmostEqual(sin, u.tan2sin(tan))
+            self.assertAlmostEqual(cos, u.tan2cos(tan))
+            self.assertAlmostEqual(sin2, u.tan2sintwo(tan))
+            self.assertAlmostEqual(cos2, u.tan2costwo(tan))
+            self.assertAlmostEqual(tan2, u.tan2tantwo(tan))
 
-            self.assertAlmostEqual(abs(sin), u.cos2sin(cos))
-            self.assertAlmostEqual(abs(sin), u.tan2sin(tan))
-            self.assertAlmostEqual(abs(cos), u.sin2cos(sin))
-            self.assertAlmostEqual(abs(cos), u.tan2cos(tan))
-            self.assertAlmostEqual(abs(tan), u.sin2tan(sin))
-            self.assertAlmostEqual(abs(tan), u.cos2tan(cos))
-            self.assertAlmostEqual(abs(sin2), u.tan2sintwo(tan))
-            self.assertAlmostEqual(abs(cos2), u.tan2costwo(tan))
+            # for cos2xxx, where 0 < theta < pi
+            theta = random.uniform(cos_regions[i], cos_regions[i + 1])
+            sin = math.sin(theta)
+            cos = math.cos(theta)
+            tan = math.tan(theta)
+            self.assertAlmostEqual(sin, u.cos2sin(cos))
+            self.assertAlmostEqual(tan, u.cos2tan(cos))
 
     def test_trigonometric_edge(self):
-        for x in [-1, 0, 1]:
-            self.assertAlmostEqual(1 - abs(x), u.cos2sin(x))
-            self.assertAlmostEqual(1 - abs(x), u.sin2cos(x))
+        # for cos2xxx, (theta, s, c, t) = (0, 0, 1, 0), (pi/2, 1, 0, None), (pi, 0, -1, 0)
+        for x in [-1, 1]:
+            self.assertAlmostEqual(0, u.cos2sin(x))
+            self.assertAlmostEqual(0, u.cos2tan(x))
+        self.assertAlmostEqual(1, u.cos2sin(0))
+
+        # for sin2xxx and tan2xxx, (s, c, t) = (-1, 0, None), (0, 1, 0), (1, 0, None)
+        for x in [-1, 1]:
+            self.assertAlmostEqual(0, u.sin2cos(x))
+        self.assertAlmostEqual(0, u.sin2tan(0))
         self.assertAlmostEqual(0, u.tan2sin(0))
-        self.assertAlmostEqual(1, u.tan2cos(0))
-        self.assertAlmostEqual(0, u.sin2tan(0))
-        self.assertAlmostEqual(0, u.cos2tan(1))
-        self.assertAlmostEqual(0, u.cos2tan(-1))
-        self.assertAlmostEqual(0, u.tan2sintwo(0))
+
+        # for tan2twoxxx, (+-pi/2, 0, -1, 0), (+-pi/4, +-1, 0, None), (0, 0, 1, 0),
+        # i.e., (0, 0, 1, 0) is only relevant for -pi/2 < theta < pi/2.
+        self.assertAlmostEqual(0, u.tan2tantwo(0))
         self.assertAlmostEqual(1, u.tan2costwo(0))
-        self.assertAlmostEqual(1, u.tan2cos(0))
-        self.assertAlmostEqual(0, u.sin2tan(0))
-        self.assertAlmostEqual(0, u.cos2tan(1))
-        self.assertAlmostEqual(0, u.cos2tan(-1))
         self.assertAlmostEqual(0, u.tan2sintwo(0))
-        self.assertAlmostEqual(1, u.tan2costwo(0))
 
     def test_chop_matrix(self):
         r = 1e-12
