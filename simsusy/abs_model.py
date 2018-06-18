@@ -1,7 +1,12 @@
 import enum
 import pyslha
 import pathlib
-from typing import Dict, Optional, Sequence, Tuple, Union, Any  # noqa: F401
+import numpy as np
+from typing import Dict, Optional, Sequence, List, Tuple, Union, Any, MutableMapping  # noqa: F401
+
+from simsusy.pyslha_customize import KeyType, ValueType, CommentType, writeSLHABlocks, writeSLHADecays
+pyslha.writeSLHABlocks = writeSLHABlocks
+pyslha.writeSLHADecays = writeSLHADecays
 
 
 class SLHAVersion(enum.Enum):
@@ -12,8 +17,10 @@ class SLHAVersion(enum.Enum):
 class AbsModel:
     """Abstract model as a wrapper of a SLHA object."""
 
-    def __init__(self, obj: Union[pyslha.Doc, str])->None:
-        if isinstance(obj, pyslha.Doc):
+    def __init__(self, obj: Union[pyslha.Doc, str, None]=None)->None:
+        if obj is None:
+            self._slha = pyslha.Doc(blocks=pyslha._dict('Blocks'))
+        elif isinstance(obj, pyslha.Doc):
             self._slha = obj
         elif isinstance(obj, pathlib.Path):
             self._slha = pyslha.readSLHAFile(str(obj), ignorenomass=True)
@@ -43,6 +50,10 @@ class AbsModel:
                 pass
         return default
 
+    def get_float(self, block_name: str, key, default=None)->Optional[float]:
+        value = self.get(block_name, key, default)
+        return None if value is None else float(value)
+
     def mass(self, pid: int)->Optional[float]:
         return self.get('MASS', pid)
 
@@ -70,3 +81,46 @@ class AbsModel:
         except KeyError:
             return None
         return dict([(tuple(sorted(c.ids)), c.br) for c in particle.decays])
+
+    def set(self, block_name: str, key: KeyType, value: ValueType, comment: CommentType='')->None:
+        block_name = block_name.upper()
+        if self.block(block_name) is None:
+            self._slha.blocks[block_name] = pyslha.Block(block_name)
+        self._slha.blocks[block_name][key] = value
+        # TODO: handle comment...
+
+    def set_mass(self, key: int, mass: float)->None:  # just a wrapper
+        self.set('MASS', key, mass)
+
+    def set_matrix(self, block_name: str, matrix: np.ndarray)->None:
+        nx, ny = matrix.shape
+        for i in range(0, nx):
+            for j in range(0, ny):
+                self.set(block_name, (i + 1, j + 1), matrix[i, j])
+
+    def set_q(self, block_name, q: float):
+        block_name = block_name.upper()
+        if self.block(block_name) is None:
+            self._slha.blocks[block_name] = pyslha.Block(block_name)
+        self._slha.blocks[block_name].q = q
+
+    def write(self, filename: Optional[str]=None, ignorenobr: bool=True, precision: int=8) -> None:
+        """provide own version of write, because pyslha.Doc.write has a bug."""
+        if filename is None:
+            return pyslha.writeSLHA(self._slha, ignorenobr=ignorenobr, precision=precision)
+        else:
+            return pyslha.write(filename, self._slha, ignorenobr=ignorenobr, precision=precision)
+
+
+class Info:
+    def __init__(self, name: str, version: str)->None:
+        self.name = name          # type: str
+        self.version = version    # type: str
+        self.errors = list()      # type: List[str]
+        self.warnings = list()    # type: List[str]
+
+    def add_error(self, msg: str):
+        self.errors.append(msg)
+
+    def add_warning(self, msg: str):
+        self.warnings.append(msg)
