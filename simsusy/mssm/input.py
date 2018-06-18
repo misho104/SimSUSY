@@ -1,5 +1,5 @@
 from simsusy.abs_model import AbsModel, SLHAVersion
-from simsusy.mssm.ewsb_parameters import EWSBParameters
+from simsusy.mssm.abstract import AbsEWSBParameters
 from simsusy.utility import sin2cos
 import logging
 import enum
@@ -104,7 +104,7 @@ class MSSMInput(AbsModel):
                         ignore.append((name, k, v))
                 # Higgs parameters validity
                 try:
-                    EWSBParameters(self)
+                    AbsEWSBParameters(self)
                 except ValueError:
                     invalid.append((name, 'invalid EWSB parameter specification.'))
             elif name == 'QEXTPAR':
@@ -183,18 +183,6 @@ class MSSMInput(AbsModel):
     def sminputs(self, key: int)->float:
         return self.get('SMINPUTS', key)
 
-    def tan_beta(self) -> float:
-        value = self.get('EXTPAR', 25) or self.get('MINPAR', 3)
-        return self.__value_or_unspecified_error(value, 'tan_beta')
-
-    def sign_mu(self) -> Optional[int]:
-        value = self.get('MINPAR', 4)
-        if value is None:
-            return None
-        elif 0.9 < abs(value) < 1.1:
-            return 1 if value > 0 else -1
-        raise ValueError(f'EXTPAR 4 should be 1 or -1.')
-
     def mg(self, key: int)->float:
         """Return gaugino mass; key should be 1-3 (but no validation)."""
         value = self.get('EXTPAR', key) or self.get('MINPAR', 2)
@@ -242,9 +230,6 @@ class MSSMInput(AbsModel):
             ValueError(f'Block {species.value[1]} needs (3,3) element.')
 
         return matrix
-
-    def ewsb_parameters(self) -> EWSBParameters:
-        return EWSBParameters(self)
 
     def vckm(self) -> np.ndarray:
         lam = self.get('VCKMIN', 1)
