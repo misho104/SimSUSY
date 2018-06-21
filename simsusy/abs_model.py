@@ -93,16 +93,18 @@ class AbsModel:
     def set_mass(self, key: int, mass: float)->None:  # just a wrapper
         self.set('MASS', key, mass)
 
-    def set_matrix(self, block_name: str, matrix: np.ndarray)->None:
+    def set_matrix(self, block_name: str, matrix: np.ndarray, diagonal_only=False)->None:
         self._matrix_cache[block_name] = matrix
         nx, ny = matrix.shape
         for i in range(0, nx):
             for j in range(0, ny):
+                if diagonal_only and i != j:
+                    continue
                 self.set(block_name, (i + 1, j + 1), matrix[i, j])
 
     def get_matrix(self, block_name: str)->np.ndarray:
         cache = self._matrix_cache.get(block_name)
-        if cache:
+        if isinstance(cache, np.ndarray):
             return cache
         block = self.block('NMIX')
         if not block:

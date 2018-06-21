@@ -24,6 +24,7 @@ class S(enum.Enum):
     def __init__(self, extpar, slha2_input):
         self.extpar = extpar
         self.slha2_input = slha2_input
+        self.slha2_output = slha2_input[0:4]
 
 
 class A(enum.Enum):
@@ -32,15 +33,16 @@ class A(enum.Enum):
     obj[0] : the numbers correspond to EXTPAR number.
     obj[1] : SLHA2 input block name.
     """
-    U = (11, 'TUIN', 'AU', 'TU')
-    D = (12, 'TDIN', 'AD', 'TD')
-    E = (13, 'TEIN', 'AE', 'TE')
+    U = (11, 'TUIN', 'AU', 'TU', 'YU')
+    D = (12, 'TDIN', 'AD', 'TD', 'YD')
+    E = (13, 'TEIN', 'AE', 'TE', 'YE')
 
-    def __init__(self, extpar, slha2_input, out_a, out_t):
+    def __init__(self, extpar, slha2_input, out_a, out_t, out_y):
         self.extpar = extpar
         self.slha2_input = slha2_input
         self.out_a = out_a
         self.out_t = out_t
+        self.out_y = out_y
 
 
 class MSSMInput(AbsModel):
@@ -204,9 +206,10 @@ class MSSMInput(AbsModel):
         value = self.get('EXTPAR', key) or self.get('MINPAR', 2)
         return self.__value_or_unspecified_error(value, f'M_{key}')
 
-    def ms(self, species: S)->np.ndarray:
+    def ms2(self, species: S)->np.ndarray:
         m0 = self.get('MINPAR', 1)
         value = np.diag([self.get('EXTPAR', species.extpar + gen) or m0 for gen in [1, 2, 3]])
+        value = value ** 2
 
         slha2block = self.block(species.slha2_input)
         if slha2block:
@@ -270,8 +273,8 @@ class MSSMInput(AbsModel):
         NOTE: SLHA2 convention uses theta-bars, while PDG2006 has only thetas.
               The difference should be ignored as it seems denoting MS-bar scheme.()
         """
-        s12, s23, s13 = (math.sin(self.get('UPMNSIN', i)) for i in [1, 2, 3])
-        c12, c23, c13 = (math.cos(self.get('UPMNSIN', i)) for i in [1, 2, 3])
+        s12, s23, s13 = (math.sin(self.get('UPMNSIN', i, default=0)) for i in [1, 2, 3])
+        c12, c23, c13 = (math.cos(self.get('UPMNSIN', i, default=0)) for i in [1, 2, 3])
         if self.get('UPMNSIN', 4) or self.get('UPMNSIN', 5) or self.get('UPMNSIN', 6):
             logger.warning('CPV is not supported and UPMNSIN 4-6 is ignored.')
         return np.array([

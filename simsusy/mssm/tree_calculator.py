@@ -140,6 +140,16 @@ class EWSBParameters(AbsEWSBParameters):
     def ye(self)->List[float]:
         return [(2**0.5) * mass / self.sm.vev() / tan2cos(self.tan_beta) for mass in self.sm.mass_e()]
 
+    def yukawa(self, species: A)->List[float]:
+        if species == A.U:
+            return self.yu()
+        elif species == A.D:
+            return self.yd()
+        elif species == A.E:
+            return self.ye()
+        else:
+            raise RuntimeError('invalid call of ewsb.yukawa')
+
     def mass(self, pid: int)->float:
         sm_value = self.sm.mass(pid)
         if isinstance(sm_value, float):
@@ -197,15 +207,30 @@ class MSSMTreeLevelCalculator(AbsCalculator):
                 assert_diagonal_matrix(matrix, 3)
                 self.output.set(species.out_a, (3, 3), matrix[2, 2])
             for species in [S.QL, S.UR, S.DR, S.LL, S.ER]:
-                matrix = self.input.ms(species)
-                assert_diagonal_matrix(matrix, 3)
+                m_sq = self.input.ms2(species)
+                assert_diagonal_matrix(m_sq, 3)
                 for gen in [1, 2, 3]:
-                    self.output.set('MSOFT', species.extpar + gen, matrix[gen - 1, gen - 1])
+                    self.output.set('MSOFT', species.extpar + gen, m_sq[gen - 1, gen - 1] ** 0.5)
             self.output.set('YU', (3, 3), self.output.ewsb.yu()[2])
             self.output.set('YD', (3, 3), self.output.ewsb.yd()[2])
             self.output.set('YE', (3, 3), self.output.ewsb.ye()[2])
         else:
-            raise NotImplementedError  # TODO: implement
+            self.output.set_matrix('VCKM', self.input.vckm())
+            self.output.set_matrix('IMVCKM', np.zeros((3, 3)))  # CPV ignored
+            self.output.set_matrix('UPMNS', self.input.upmns())
+            self.output.set_matrix('IMUPMNS', np.zeros((3, 3)))  # CPV ignored
+            for species in [A.U, A.D, A.E]:
+                y = np.diag(self.output.ewsb.yukawa(species))  # diagonal in super-CKM basis
+                self.output.set_matrix(species.out_y, y, diagonal_only=True)
+
+                a = self.input.a(species)
+                if a is None:
+                    t = self.input.t(species)
+                else:
+                    t = y * a
+                self.output.set_matrix(species.out_t, t)
+            for species in [S.QL, S.UR, S.DR, S.LL, S.ER]:
+                self.output.set_matrix(species.slha2_output, self.input.ms2(species))
 
     def _calculate_higgses(self):
         assert self.output.ewsb.is_set()
@@ -311,3 +336,76 @@ class MSSMTreeLevelCalculator(AbsCalculator):
 
         for gen in [1, 2, 3]:
             self.output.set_mass(1000010 + 2 * gen, sneutrino_mass(gen)**0.5)
+
+    def _calculate_sfermion_slha2(self):
+        mz2_cos2b = np.diag([1, 1, 1]) * self.output.sm.mz()**2 * tan2costwo(self.output.ewsb.tan_beta)
+        sw2 = self.output.sm.sin_w_sq()
+        mu_tan_b = self.output.ewsb.mu * self.output.ewsb.tan_beta
+        mu_cot_b = self.output.ewsb.mu / self.output.ewsb.tan_beta
+        ckm = self.output.get_matrix('VCKM')
+        pmns = self.output.get_matrix('UPMNS')
+
+        def dag(m: np.ndarray) -> np.ndarray:
+            return np.conjugate(m.T)
+
+        def m_join(m11: np.ndarray, m12: np.ndarray, m21: np.ndarray, m22: np.ndarray) -> np.ndarray:
+            return np.vstack([np.hstack([m11, m12]), np.hstack([m21, m22])])
+
+        def mass_matrix(right: S) -> np.ndarray:
+            if right == S.UR:
+                (left, a_species, mf) = (S.QL, A.U, self.output.sm.mass_u())
+                dl, dr, mu = (1 / 2 - 2 / 3 * sw2), 2 / 3 * sw2, mu_cot_b
+                vev = self.output.sm.vev() * tan2sin(self.output.ewsb.tan_beta)
+            elif right == S.DR:
+                (left, a_species, mf) = (S.QL, A.D, self.output.sm.mass_d())
+                dl, dr, mu = -(1 / 2 - 1 / 3 * sw2), -1 / 3 * sw2, mu_tan_b
+                vev = self.output.sm.vev() * tan2cos(self.output.ewsb.tan_beta)
+            elif right == S.ER:
+                (left, a_species, mf) = (S.LL, A.E, self.output.sm.mass_e())
+                dl, dr, mu = -(1 / 2 - sw2), -sw2, mu_tan_b
+                vev = self.output.sm.vev() * tan2cos(self.output.ewsb.tan_beta)
+            else:
+                raise NotImplementedError
+            msl2 = self.output.get_matrix(left.slha2_output)
+            if right == S.UR:
+                msl2 = ckm @ msl2 @ dag(ckm)
+            msr2 = self.output.get_matrix(right.slha2_output)
+            mf = np.diag(mf)
+            t = self.output.get_matrix(a_species.out_t)
+
+            # SLHA Eq.23-25 and SUSY Primer (8.4.18)
+            return m_join(
+                msl2 + mf**2 + dl * mz2_cos2b, vev / (2**0.5) * dag(t) - mf * mu,
+                vev / (2**0.5) * t - mf * np.conjugate(mu), msr2 + mf**2 + dr * mz2_cos2b
+            )
+
+        def sneutrino_mass()->np.ndarray:
+            msl2 = self.output.get_matrix(S.LL.slha2_output)
+            mf = self.output.sm.mass_n()
+            dl = 1 / 2
+            return pmns @ msl2 @ dag(pmns) + np.diag(mf)**2 + dl * mz2_cos2b
+
+        def prettify_matrix(m: np.ndarray, threshold=1e-10)->np.ndarray:
+            nx, ny = m.shape
+            for i in range(nx):
+                m[i] = m[i] * (1 if max(m[i], key=lambda v: abs(v)) > 0 else -1)
+                for j in range(ny):
+                    if abs(m[i, j]) < threshold:
+                        m[i, j] = 0
+            return m
+
+        for (right, pid, mix_name) in ((S.UR, 1, 'USQMIX'), (S.DR, 0, 'DSQMIX'), (S.ER, 10, 'SELMIX')):
+            mass_sq, f = mass_diagonalization(mass_matrix(right))
+            self.output.set_mass(1000001 + pid, mass_sq[0]**0.5)
+            self.output.set_mass(1000003 + pid, mass_sq[1]**0.5)
+            self.output.set_mass(1000005 + pid, mass_sq[2]**0.5)
+            self.output.set_mass(2000001 + pid, mass_sq[3]**0.5)
+            self.output.set_mass(2000003 + pid, mass_sq[4]**0.5)
+            self.output.set_mass(2000005 + pid, mass_sq[5]**0.5)
+            self.output.set_matrix(mix_name, prettify_matrix(f))
+
+        mass_sq, f = mass_diagonalization(sneutrino_mass())
+        self.output.set_mass(1000012, mass_sq[0]**0.5)
+        self.output.set_mass(1000014, mass_sq[1]**0.5)
+        self.output.set_mass(1000016, mass_sq[2]**0.5)
+        self.output.set_matrix('SNUMIX', prettify_matrix(f))
