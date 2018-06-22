@@ -127,9 +127,9 @@ class AbsModel:
     def write(self, filename: Optional[str]=None, ignorenobr: bool=True, precision: int=8) -> None:
         """provide own version of write, because pyslha.Doc.write has a bug."""
         if filename is None:
-            return pyslha.writeSLHA(self._slha, ignorenobr=ignorenobr, precision=precision)
+            print(pyslha.writeSLHA(self._slha, ignorenobr=ignorenobr, precision=precision))
         else:
-            return pyslha.write(filename, self._slha, ignorenobr=ignorenobr, precision=precision)
+            pyslha.write(filename, self._slha, ignorenobr=ignorenobr, precision=precision)
 
 
 class Info:

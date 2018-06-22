@@ -1,8 +1,9 @@
 import simsusy.simsusy
 from simsusy.abs_model import Info
 from simsusy.abs_calculator import AbsCalculator
-from simsusy.mssm.input import MSSMInput, S, A, SLHAVersion
-from simsusy.mssm.model import MSSMModel
+from simsusy.mssm.model import MSSMModel as Model
+from simsusy.mssm.input import MSSMInput as Input
+from simsusy.mssm.input import S, A, SLHAVersion
 from simsusy.mssm.abstract import AbsEWSBParameters, AbsSMParameters
 from simsusy.utility import tan2costwo, tan2sintwo, tan2tantwo, tan2cos, tan2sin, sin2cos
 from simsusy.utility import autonne_takagi, singular_value_decomposition, mass_diagonalization
@@ -12,7 +13,7 @@ from typing import List, Optional  # noqa: F401
 
 
 class SMParameters(AbsSMParameters):
-    def __init__(self, input):  # type: (MSSMInput) -> None
+    def __init__(self, input):  # type: (Input) -> None
         super().__init__(input)
     """
     Mathematica code to check the calculation:
@@ -72,7 +73,7 @@ class SMParameters(AbsSMParameters):
 
 
 class EWSBParameters(AbsEWSBParameters):
-    def __init__(self, input, sm):  # type: (MSSMInput, SMParameters) -> None
+    def __init__(self, input, sm):  # type: (Input, SMParameters) -> None
         super().__init__(input)
         self.sm = sm
         self.calculate()
@@ -167,13 +168,13 @@ class EWSBParameters(AbsEWSBParameters):
             return NotImplemented
 
 
-class MSSMTreeLevelCalculator(AbsCalculator):
-    name = simsusy.simsusy.__name__ + '/MSSMTree'
+class Calculator(AbsCalculator):
+    name = simsusy.simsusy.__pkgname__ + '/MSSMTree'
     version = simsusy.simsusy.__version__
 
-    def __init__(self, input: MSSMInput)->None:
-        self.input = input  # type: MSSMInput
-        self.output = MSSMModel()
+    def __init__(self, input: Input)->None:
+        self.input = input  # type: Input
+        self.output = Model()
         # super().__init__(input=input)
 
     def calculate(self):
