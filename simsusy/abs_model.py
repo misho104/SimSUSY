@@ -124,6 +124,12 @@ class AbsModel:
             self._slha.blocks[block_name] = pyslha.Block(block_name)
         self._slha.blocks[block_name].q = q
 
+    def remove_block(self, block_name):
+        try:
+            del self._slha.blocks[tuple(block_name.upper())]
+        except KeyError:
+            pass
+
     def write(self, filename: Optional[str]=None, ignorenobr: bool=True, precision: int=8) -> None:
         """provide own version of write, because pyslha.Doc.write has a bug."""
         if filename is None:
