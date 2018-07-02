@@ -106,7 +106,7 @@ class AbsModel:
         cache = self._matrix_cache.get(block_name)
         if isinstance(cache, np.ndarray):
             return cache
-        block = self.block('NMIX')
+        block = self.block(block_name)
         if not block:
             return np.array()
         nx_ny = max(block.keys())
