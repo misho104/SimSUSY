@@ -207,8 +207,10 @@ class MSSMInput(AbsModel):
         return self.__value_or_unspecified_error(value, f'M_{key}')
 
     def ms2(self, species: S)->np.ndarray:
-        m0 = self.get('MINPAR', 1)
-        value = np.diag([self.get('EXTPAR', species.extpar + gen) or m0 for gen in [1, 2, 3]])
+        minpar_value = self.get('MINPAR', 1)
+        extpar_values = [self.get('EXTPAR', species.extpar + gen) for gen in [1, 2, 3]]
+
+        value = np.diag([extpar if extpar is not None else minpar_value for extpar in extpar_values])
         value = value ** 2
 
         slha2block = self.block(species.slha2_input)
@@ -216,7 +218,7 @@ class MSSMInput(AbsModel):
             for ix in range(1, 4):
                 for iy in range(ix, 4):
                     v = slha2block.get(ix, iy)
-                    if v:
+                    if v is not None:
                         value[ix, iy] = value[iy, ix] = v
 
         return self.__value_or_unspecified_error(value, f'm_sfermion({species.name}) mass')
@@ -224,12 +226,15 @@ class MSSMInput(AbsModel):
     def a(self, species: A) -> np.ndarray:
         """Return A-term matrix, but only if T-matrix is not specified in the
         input; otherwise return None, and one should read T-matrix."""
-        a33 = self.get('EXTPAR', species.extpar) or self.get('MINPAR', 5)
+        minpar_a33 = self.get('MINPAR', 5)
+        extpar_a33 = self.get('EXTPAR', species.extpar)
+
+        a33 = extpar_a33 if extpar_a33 is not None else minpar_a33
 
         slha2block = self.block(species.slha2_input)
         if slha2block:
             for k, v in slha2block.items():
-                if v != 0:
+                if v is not None:
                     return None  # because T-matrix is specified.
 
         return self.__value_or_unspecified_error(np.diag([0, 0, a33]), f'A({species.name})')
