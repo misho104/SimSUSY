@@ -8,16 +8,21 @@ CommentType = str
 BLOCKS_ORDER = [
     'SPINFO', 'DCINFO', 'MODSEL', 'SMINPUTS', 'MINPAR', 'EXTPAR',
     'VCKMIN', 'UPMNSIN', 'MSQ2IN', 'MSU2IN', 'MSD2IN', 'MSL2IN', 'MSE2IN', 'TUIN', 'TDIN', 'TEIN',
-    'MASS', 'NMIX', 'UMIX', 'VMIX', 'ALPHA', 'HMIX', 'GAUGE', 'MSOFT',
+    'MASS', 'NMIX', 'UMIX', 'VMIX', 'ALPHA', 'FRALPHA', 'HMIX', 'GAUGE', 'MSOFT',
     'MSQ2', 'MSU2', 'MSD2', 'MSL2', 'MSE2',
     'STOPMIX', 'SBOTMIX', 'STAUMIX', 'USQMIX', 'DSQMIX', 'SELMIX', 'SNUMIX',
     'AU', 'AD', 'AE', 'TU', 'TD', 'TE', 'YU', 'YD', 'YE',
 ]
 
+COMMENTED_OUT_BLOCKS = [  # TODO: not to hardcode...
+    'MODSEL', 'MINPAR', 'EXTPAR',
+    'VCKMIN', 'UPMNSIN', 'MSQ2IN', 'MSU2IN', 'MSD2IN', 'MSL2IN', 'MSE2IN', 'TUIN', 'TDIN', 'TEIN',
+]
+
 
 def _comment_str(comment: CommentType='')->str:
     comment = comment.strip()
-    return '# ' + comment + '\n' if comment else '#\n'
+    return '# ' + comment + '\n' if comment else '# ...\n'
 
 
 def format_block_line(name: str, q: Optional[float]=None, comment: CommentType='')->str:
@@ -51,25 +56,37 @@ def format_mass_line(key: KeyType, value: ValueType, comment: CommentType='')->s
     return f' {key:>9}   {value:15.8e}   {_comment_str(comment)}'
 
 
-def writeSLHABlocks(blocks: MutableMapping[Tuple[str, ...], pyslha.Block], precision: int=8) -> str:
+def block_to_str(block: pyslha.Block, commented_out=False) -> List[str]:
+    lines = []  # type: List[str]
+    lines.append(format_block_line(block.name, block.q))
+    if block.name.upper() == 'MASS':
+        lines += [format_mass_line(k, block[k]) for k in _sorted_pid(block.keys())]
+    else:
+        lines += [format_line(k, block[k]) for k in sorted(block.keys())]
+    if commented_out:
+        for i, b in enumerate(lines):
+            if b[0] == ' ':
+                lines[i] = b.replace(' ', '#', 1)
+            else:
+                lines[i] = '#' + b.replace('  ', ' ', 1)
+    return lines
+
+
+def writeSLHABlocks(blocks: MutableMapping[Tuple[str, ...], pyslha.Block], precision: int = 8)->str:
     order = list(BLOCKS_ORDER)  # clone
     for b in blocks.values():
         if b.name not in order:
             order.append(b.name)
-    lines = []
+    lines = []  # type: List[str]
     for name in order:
         b = blocks.get(tuple(name))
         if b:
-            lines.append(format_block_line(b.name, b.q))
-            if b.name.upper() == 'MASS':
-                lines += [format_mass_line(k, b[k]) for k in _sorted_pid(b.keys())]
-            else:
-                lines += [format_line(k, b[k]) for k in sorted(b.keys())]
-            lines.append('\n')
+            lines += block_to_str(b, commented_out=(b.name in COMMENTED_OUT_BLOCKS))
+            lines.append('#\n')  # some old tools does not accept empty line
     return ''.join(lines)
 
 
-def writeSLHADecays(decays: MutableMapping[int, pyslha.Particle], ignorenobr: bool=False, precision: int=8)->str:
+def writeSLHADecays(decays: MutableMapping[int, pyslha.Particle], ignorenobr: bool = False, precision: int = 8)->str:
     lines = []
     if decays is None:
         return ''
@@ -79,7 +96,7 @@ def writeSLHADecays(decays: MutableMapping[int, pyslha.Particle], ignorenobr: bo
             if d.br > 0 or not ignorenobr:
                 ids_str = ''.join([f'{i:>9} ' for i in d.ids])
                 lines.append(f'   {d.br:16.8e}   {len(d.ids):>2}   {ids_str}  #\n')
-        lines.append('\n')
+        lines.append('#\n')  # some old tools does not accept empty line
     return ''.join(lines)
 
 

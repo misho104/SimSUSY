@@ -102,25 +102,21 @@ def run(context, calculator, input, output):
             logger.error(f'Run with --debug option to see stack trace.')
         exit(1)
     if not(isinstance(mod, types.ModuleType) and
-           all(inspect.isclass(c) for c in [mod.Calculator, mod.Input, mod.Model]) and
+           all(inspect.isclass(c) for c in [mod.Calculator, mod.Input, mod.Output]) and
            issubclass(mod.Calculator, simsusy.abs_calculator.AbsCalculator) and
            issubclass(mod.Input, simsusy.abs_model.AbsModel) and
-           issubclass(mod.Model, simsusy.abs_model.AbsModel)
+           issubclass(mod.Output, simsusy.abs_model.AbsModel)
            ):
         logger.error(f'Calculator {calculator} imported but invalid.')
         if context.obj['DEBUG']:
             logger.error('Debug information:')
             logger.error(f'\tCalculator\t{mod.Calculator}')
             logger.error(f'\tInput\t\t{mod.Input}')
-            logger.error(f'\tModel(Output)\t{mod.Model}')
+            logger.error(f'\tOutput\t\t{mod.Output}')
         else:
             logger.error(f'Run with --debug option to see information.')
         exit(1)
-
     input_obj = mod.Input(input)
     calc_obj = mod.Calculator(input_obj)
     calc_obj.calculate()
-    if output:
-        calc_obj.output.write(output)
-    else:
-        calc_obj.output.write()
+    calc_obj.write_output(output)

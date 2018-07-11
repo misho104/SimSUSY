@@ -1,7 +1,7 @@
 import simsusy.simsusy
 from simsusy.abs_model import Info
 from simsusy.abs_calculator import AbsCalculator
-from simsusy.mssm.model import MSSMModel as Model
+from simsusy.mssm.model import MSSMModel as Output
 from simsusy.mssm.input import MSSMInput as Input
 from simsusy.mssm.input import S, A, SLHAVersion
 from simsusy.mssm.abstract import AbsEWSBParameters, AbsSMParameters
@@ -173,9 +173,12 @@ class Calculator(AbsCalculator):
     version = simsusy.simsusy.__version__
 
     def __init__(self, input: Input)->None:
-        self.input = input  # type: Input
-        self.output = Model()
+        self.input = input       # type: Input
+        self.output = Output()   # type: Output
         # super().__init__(input=input)
+
+    def write_output(self, filename: Optional[str]=None)->None:
+        self.output.write(filename)
 
     def calculate(self):
         self.output.input = self.input
