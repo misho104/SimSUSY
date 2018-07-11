@@ -1,33 +1,54 @@
+import logging
+import json
+import pathlib
 from typing import TYPE_CHECKING, List, Optional  # noqa: F401
 if TYPE_CHECKING:
     from simsusy.mssm.input import MSSMInput  # noqa: F401
 
+logger = logging.getLogger(__name__)
+
 
 class AbsSMParameters():
+    DEFAULT_DATA = pathlib.Path(__file__).parent.parent.resolve() / 'default_values.json'
+
     def __init__(self, input):  # type: (MSSMInput) -> None
-        def get(key: int)->float:
+        with open(self.DEFAULT_DATA) as f:
+            self.default_values = json.load(f)
+
+        def get(key: int, default_key: str)->float:
             value = input.sminputs(key)
-            if value is None:
-                raise ValueError(f'Block SMINPUTS {key} is not specified.')
-            return value
+            if isinstance(value, float):
+                return value
+            if key <= 7:
+                logger.warning(f'Block SMINPUTS {key} is not specified; default value is used.')
+            else:
+                logger.debug(f'Block SMINPUTS {key} is not specified; default value is used.')
 
-        self._alpha_em_inv = get(1)  # MS-bar, at mZ, with 5 active flavors
-        self._g_fermi = get(2)
-        self._alpha_s = get(3)       # MS-bar, at mZ, with 5 active flavors
-        self._mz = get(4)            # pole
-        self._mb_mb = get(5)         # MS-bar, at mb
-        self._mt = get(6)            # pole
-        self._mtau = get(7)          # pole
+            default = self.default_values.get(default_key)
+            if isinstance(default, dict):
+                value = default.get('value')
+                if isinstance(value, float):
+                    return value
+            else:
+                raise RuntimeError(f'Invalid parameter {default_key} in {self.DEFAULT_DATA}, which must be float.')
 
-        self._mnu1 = input.get_float('SMINPUTS', 12)  # pole
-        self._mnu2 = input.get_float('SMINPUTS', 14)  # pole
-        self._mnu3 = input.get_float('SMINPUTS', 8)   # pole
-        self._me = input.get_float('SMINPUTS', 11)    # pole
-        self._mmu = input.get_float('SMINPUTS', 13)   # pole
-        self._md_2gev = input.get_float('SMINPUTS', 21)  # MS-bar, at 2GeV
-        self._mu_2gev = input.get_float('SMINPUTS', 22)  # MS-bar, at 2GeV
-        self._ms_2gev = input.get_float('SMINPUTS', 23)  # MS-bar, at 2GeV
-        self._mc_mc = input.get_float('SMINPUTS', 24)    # MS-bar, at mc
+        self._alpha_em_inv = get(1, 'alpha_EW_inverse@m_Z')  # MS-bar, with 5 active flavors
+        self._g_fermi = get(2, 'G_F')
+        self._alpha_s = get(3, 'alpha_s@m_Z')                # MS-bar, with 5 active flavors
+        self._mz = get(4, 'm_Z')                             # pole
+        self._mb_mb = get(5, 'm_b@m_b')                      # MS-bar, at mb
+        self._mt = get(6, 'm_t')                             # pole
+        self._mtau = get(7, 'm_tau')                         # pole
+
+        self._mnu1 = get(12, 'm_nu1')                        # pole
+        self._mnu2 = get(14, 'm_nu2')                        # pole
+        self._mnu3 = get(8, 'm_nu3')                         # pole
+        self._me = get(11, 'm_e')                            # pole
+        self._mmu = get(13, 'm_mu')                          # pole
+        self._md_2gev = get(21, 'm_d@2GeV')                  # MS-bar, at 2GeV
+        self._mu_2gev = get(22, 'm_u@2GeV')                  # MS-bar, at 2GeV
+        self._ms_2gev = get(23, 'm_s@2GeV')                  # MS-bar, at 2GeV
+        self._mc_mc = get(24, 'm_c@m_c')                     # MS-bar, at mc
 
     def sin_w_sq(self) -> float: return NotImplemented
 
@@ -49,17 +70,17 @@ class AbsSMParameters():
         if pid == 6:
             return self._mt
         elif pid == 11:
-            return self._me or 0.511e-3  # TODO: improve
+            return self._me
         elif pid == 13:
-            return self._mmu or 0.105  # TODO: improve
+            return self._mmu
         elif pid == 15:
-            return self._mtau or 1.77  # TODO: improve
+            return self._mtau
         elif pid == 12:
-            return self._mnu1 or 0.  # TODO: improve
+            return self._mnu1
         elif pid == 14:
-            return self._mnu2 or 0.  # TODO: improve
+            return self._mnu2
         elif pid == 16:
-            return self._mnu3 or 0.  # TODO: improve
+            return self._mnu3
         elif pid == 23:
             return self._mz
         else:
