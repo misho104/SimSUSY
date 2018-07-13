@@ -80,8 +80,9 @@ def simsusy_main(context, **kwargs):
 @click.argument('calculator')
 @click.argument('input', type=click.Path(exists=True, dir_okay=False))
 @click.argument('output', type=click.Path(dir_okay=False), required=False)
+@click.option('--v1', is_flag=True, help='Try to output in SLHA1 format')
 @click.pass_context
-def run(context, calculator, input, output):
+def run(context, calculator, input, output, v1):
     calculators = Calculators()
     guessed_calculator = calculators.guess(calculator)
     if guessed_calculator is None:
@@ -119,4 +120,4 @@ def run(context, calculator, input, output):
     input_obj = mod.Input(input)
     calc_obj = mod.Calculator(input_obj)
     calc_obj.calculate()
-    calc_obj.write_output(output)
+    calc_obj.write_output(output, slha1=v1)

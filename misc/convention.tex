@@ -301,5 +301,29 @@ So the notations can be matched with
 where the LHS are the SLHA parameters and the RHS are those in SUSY primer.
 
 
+\section{Reverting sfermion rotation}
+In SLHA2 convention~\cite{SLHA2}, the sfermion mass basis $\tilde f_i$ and super-CKM/PMNS basis $\tilde{\vc f}$ are related as
+\begin{equation}
+ \tilde f_i = R_{iA}\tilde f_A,
+\end{equation}
+where $R$ is the rotation matrix (e.g.~\texttt{USQMIX}), capital (small) indices are used to denote super-CKM/PMNS (mass) eigenstates, and
+the super-CKM/PMNS eigenstates are defined as, e.g.,
+\begin{equation}
+ \tilde {\vc u} = (
+\tilde u\w L, \tilde c\w L, \tilde t\w L,
+\tilde u\w R, \tilde c\w R, \tilde t\w R)\tra.
+\end{equation}
+
+If the model has no flavor (and CP) violation and the left--right mixings in the first and second generation are negligible, we can convert the SLHA2 output to SLHA1 output.
+The SLHA1 mixing matrix $R'$ is obtained as
+\begin{equation}
+R' = \begin{pmatrix}
+  R_{a3} & R_{a6}\\
+  R_{b3} & R_{b6}
+\end{pmatrix}
+\end{equation}
+with all elements are non-zero and $a<b$, and thus $\tilde f_a\equiv\tilde f^{\text{3rd}}_1$
+and  $\tilde f_b\equiv\tilde f^{\text{3rd}}_2$.
+The first and second generation fermions, $\tilde f_A$, are identified with $\tilde f_i$, where $|R_{iA}|>|R_{jA}|$ for all $j\neq i$.
 \bibliography{bibliography}
 \end{document}

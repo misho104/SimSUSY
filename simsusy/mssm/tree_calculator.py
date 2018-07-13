@@ -3,13 +3,17 @@ from simsusy.abs_model import Info
 from simsusy.abs_calculator import AbsCalculator
 from simsusy.mssm.model import MSSMModel as Output
 from simsusy.mssm.input import MSSMInput as Input
-from simsusy.mssm.input import S, A, SLHAVersion
+from simsusy.mssm.library import S, A, CPV, FLV
 from simsusy.mssm.abstract import AbsEWSBParameters, AbsSMParameters
 from simsusy.utility import tan2costwo, tan2sintwo, tan2tantwo, tan2cos, tan2sin, sin2cos
 from simsusy.utility import autonne_takagi, singular_value_decomposition, mass_diagonalization
+from simsusy.utility import is_real_matrix, is_diagonal_matrix
 import math
 import numpy as np
-from typing import List, Optional  # noqa: F401
+from typing import List, Optional, Union, Tuple  # noqa: F401
+
+import logging
+logger = logging.getLogger(__name__)
 
 
 class SMParameters(AbsSMParameters):
@@ -57,17 +61,17 @@ class SMParameters(AbsSMParameters):
         if value is not NotImplemented:
             return value
         elif pid == 1:
-            return self._md_2gev or 0.  # TODO: improve
+            return self._md_2gev
         elif pid == 2:
-            return self._mu_2gev or 0.  # TODO: improve
+            return self._mu_2gev
         elif pid == 3:
-            return self._ms_2gev or 0.1  # TODO: improve
+            return self._ms_2gev
         elif pid == 4:
-            return self._mc_mc or 1.3  # TODO: improve
+            return self._mc_mc
         elif pid == 5:
-            return self._mb_mb   # identify msbar mass as pole mass
+            return self._mb_mb
         elif pid == 24:
-            return self.mw()  # TODO: improve
+            return self.default_value('m_W')
         else:
             return NotImplemented
 
@@ -80,6 +84,10 @@ class EWSBParameters(AbsEWSBParameters):
         assert self.is_set()
 
     def calculate(self)->None:
+        for v in (self.mh1_sq, self.mh2_sq, self.mu, self.ma_sq, self.ma0, self.mhc, self.tan_beta, self.sign_mu):
+            if isinstance(v, complex):
+                raise ValueError('This calculator does not support CPV.')
+
         # see doc/convention.pdf for equations and discussion.
         assert isinstance(self.tan_beta, float)
         cos_2beta = tan2costwo(self.tan_beta)
@@ -133,12 +141,15 @@ class EWSBParameters(AbsEWSBParameters):
     def yu(self)->List[float]:
         """Returns the diagonal elements of the Yukawa matrix (after super-CKM
         rotation)"""
+        assert(isinstance(self.tan_beta, float))
         return [(2**0.5) * mass / self.sm.vev() / tan2sin(self.tan_beta) for mass in self.sm.mass_u()]
 
     def yd(self)->List[float]:
+        assert(isinstance(self.tan_beta, float))
         return [(2**0.5) * mass / self.sm.vev() / tan2cos(self.tan_beta) for mass in self.sm.mass_d()]
 
     def ye(self)->List[float]:
+        assert(isinstance(self.tan_beta, float))
         return [(2**0.5) * mass / self.sm.vev() / tan2cos(self.tan_beta) for mass in self.sm.mass_e()]
 
     def yukawa(self, species: A)->List[float]:
@@ -173,18 +184,147 @@ class Calculator(AbsCalculator):
     version = simsusy.simsusy.__version__
 
     def __init__(self, input: Input)->None:
-        self.input = input       # type: Input
+        super().__init__(input=input, logger=logger)
         self.output = Output()   # type: Output
-        # super().__init__(input=input)
+        # MODSEL parameters set in load_modsel
+        self.cpv = CPV.NONE      # type: CPV
+        self.flv = FLV.NONE      # type: FLV
 
-    def write_output(self, filename: Optional[str]=None)->None:
+    def write_output(self, filename: Optional[str]=None, slha1: bool=False)->None:
+        if slha1:
+            if self.cpv == CPV.NONE and self.flv == FLV.NONE:
+                self.convert_slha2_to_slha1()
+            else:
+                self.add_warning('SLHA1 does not support CPV/FLV.')
+        for tmp in ['HMIX', 'GAUGE', 'MSOFT', 'MSQ2', 'MSU2', 'MSD2', 'MSL2', 'MSE2',
+                    'AU', 'AD', 'AE', 'TU', 'TD', 'TE', 'YU', 'YD', 'YE']:
+            if self.output.block(tmp):
+                self.output.set_q(tmp, 200)  # TODO: more proper way...
         self.output.write(filename)
+
+    def _load_modsel(self):
+        modsel = self.input.block('MODSEL')
+        for k, v in modsel.items():
+            if k == 1 and v not in (0, 1):  # accept only general MSSM or mSUGRA. (no distinction)
+                self.add_error(f'Block MODSEL: {k} = {v} is invalid; should be 0 (or 1).')
+            elif k in [3, 4, 5] and v != 0:  # tree_calculator handles only MSSM with no RpV/CPV.
+                self.add_error(f'Block MODSEL: {k} = {v} is invalid; should be 0.')
+            elif k == 6:
+                try:
+                    self.flv = FLV(v)
+                except ValueError:
+                    self.add_error(f'Block MODSEL: {k} = {v} is invalid.')
+            elif k == 11 and v != 1:
+                self.add_error(f'Block MODSEL: {k} = {v} is ignored.')
+            elif k == 12 or k == 21:  # defined in SLHA spec
+                self.add_error(f'Block MODSEL: {k} = {v} is ignored.')
+            else:
+                self.add_error(f'Block MODSEL: {k} = {v} is ignored.')
+
+    def _load_sminputs(self):
+        sminputs = self.input.block('SMINPUTS')
+        for k, v in sminputs.items():
+            if 1 <= k <= 8 or k in [11, 12, 13, 14, 21, 22, 23, 24]:
+                pass
+            else:
+                self.add_warning(f'Block SMINPUTS: {k} = {v} is invalid.')
+        self.output.sm = SMParameters(self.input)
+
+    def _load_ewsb_parameters(self):
+        if self.input.get_complex('MINPAR', 3) and self.input.get_complex('EXTPAR', 25):
+            self.add_warning('TanBeta in MINPAR is ignored due to EXTPAR-25.')
+        try:
+            self.output.ewsb = EWSBParameters(self.input, self.output.sm)
+        except ValueError as e:
+            self.add_error(f'invalid EWSB specification ({e})')
+
+    def _check_other_input_validity(self):
+        for block in self.input._slha.blocks:
+            name = ''.join(block)
+            content = self.input._slha.blocks[block]
+            if name in ['MODSEL', 'SMINPUTS', 'VCKMIN', 'UPMNSIN']:
+                pass  # validity is checked when it is loaded
+            elif name == 'MINPAR':
+                for k, v in content.items():
+                    if not 1 <= k <= 5:
+                        self.add_warning(f'Block {name}: {k} = {v} is ignored.')
+            elif name == 'EXTPAR':
+                for k, v in content.items():
+                    if not (k in [0, 1, 2, 3, 11, 12, 13] or
+                            21 <= k <= 27 or
+                            31 <= k <= 36 or
+                            41 <= k <= 49):
+                        self.add_warning(f'Block {name}: {k} = {v} is ignored.')
+            elif name in ['QEXTPAR']:
+                self.add_warning(f'BLOCK {name} is not supported and ignored.')
+            elif name in ['MSQ2IN', 'MSU2IN', 'MSD2IN', 'MSL2IN', 'MSE2IN']:
+                for k, v in content.items():
+                    if not (isinstance(k, tuple) and len(k) == 2):
+                        self.add_error(f'Block {name}: {k} = {v} is invalid.')
+                    elif not (1 <= k[0] <= 3 and k[0] <= k[1] <= 3):  # upper triangle only
+                        self.add_warning(f'Block {name}: {k} = {v} is ignored; upper triangle is used.')
+            elif name in ['TUIN', 'TDIN', 'TEIN']:
+                for k, v in content.items():
+                    if not (isinstance(k, tuple) and len(k) == 2):
+                        self.add_error(f'Block {name}: {k} = {v} is invalid.')
+                    elif not (1 <= k[0] <= 3 and 1 <= k[1] <= 3):
+                        self.add_warning(f'Block {name}: {k} = {v} is ignored; upper triangle is used.')
+            else:
+                self.add_warning(f'Unknown block {name} is ignored.')
+
+    def _check_cpv_flv_consistency(self):
+        # CPV consistency
+        if self.cpv != CPV.FULL:
+            for species in S:
+                if not is_real_matrix(self.input.ms2(species)):
+                    self.add_error(f'CPV is conserved while complex entry in {species.slha2_input}.')
+            for species in A:
+                m = self.input.a(species)
+                if m is None:
+                    m = self.input.t(species)
+                if not is_real_matrix(m):
+                    self.add_error(f'CPV is conserved while complex entry in A- or T-matrix.')
+            for i in [1, 2, 3]:
+                if isinstance(self.input.mg(i), complex):
+                    self.add_error(f'CPV is conserved while gaugino mass is not real')
+
+            if self.cpv == CPV.NONE:
+                if not is_real_matrix(self.input.vckm()):
+                    self.add_warning('CKM CP-phase is ignored due to MODSEL-5')
+                    self.input.set('VCKMIN', 4, 0)
+                if not is_real_matrix(self.input.upmns()):
+                    self.add_warning('PMNS CP-phase is ignored due to MODSEL-5')
+                    for i in (4, 5, 6):
+                        self.input.set('UPMNSIN', i, 0)
+
+        if not self.flv.qfv():
+            for matrix in [self.input.ms2(S.QL), self.input.ms2(S.UR), self.input.ms2(S.DR),
+                           self.input.a(A.U) if self.input.t(A.U) is None else self.input.t(A.U),
+                           self.input.a(A.D) if self.input.t(A.D) is None else self.input.t(A.D)]:
+                if not is_diagonal_matrix(matrix):
+                    self.add_error('Quark flavor is set conserved in MODSEL.')
+            if not is_diagonal_matrix(self.input.vckm()):
+                self.add_warning('VCKMIN is ignored due to MODSEL-6.')
+                self.input.remove_block('VCKMIN')
+
+        if not self.flv.lfv():
+            for matrix in [self.input.ms2(S.LL), self.input.ms2(S.ER),
+                           self.input.a(A.E) if self.input.t(A.E) is None else self.input.t(A.E)]:
+                if not is_diagonal_matrix(matrix):
+                    self.add_error('Lepton flavor is set conserved in MODSEL.')
+            if not is_diagonal_matrix(self.input.upmns()):
+                self.add_warning('UPMNSIN is ignored due to MODSEL-6.')
+                self.input.remove_block('UPMNSIN')
 
     def calculate(self):
         self.output.input = self.input
         self.output.spinfo = Info(self.name, self.version)
-        self.output.sm = SMParameters(self.input)
-        self.output.ewsb = EWSBParameters(self.input, self.output.sm)
+        self._load_modsel()
+        self._load_sminputs()
+        self._load_ewsb_parameters()
+        self._check_other_input_validity()
+        self._check_cpv_flv_consistency()
+        self._prepare_sm_ewsb()
         self._calculate_softmasses()
         self._calculate_higgses()
         self._calculate_neutralino()
@@ -192,49 +332,49 @@ class Calculator(AbsCalculator):
         self._calculate_gluino()
         self._calculate_sfermion()
 
+    def _prepare_sm_ewsb(self):
+        assert self.output.sm is not None
+        assert self.output.ewsb is not None
+
+        assert isinstance(self.output.ewsb.mu, float)
+        assert isinstance(self.output.ewsb.tan_beta, float)
+        assert isinstance(self.output.ewsb.ma_sq, float)
+
+        # isinstance(self.ewsb, EWSBParameters)
+        for pid in [5, 6, 15, 23, 24]:
+            self.output.set_mass(pid, self.output.sm.mass(pid))
+        self.output.set('ALPHA', None, self.output.ewsb.alpha())
+        self.output.set('HMIX', 1, self.output.ewsb.mu)
+        self.output.set('HMIX', 2, self.output.ewsb.tan_beta)
+        self.output.set('HMIX', 3, self.output.sm.vev())
+        self.output.set('HMIX', 4, self.output.ewsb.ma_sq)
+        self.output.set('GAUGE', 1, self.output.sm.gy())
+        self.output.set('GAUGE', 2, self.output.sm.gw())
+        self.output.set('GAUGE', 3, self.output.sm.gs())
+
     def _calculate_softmasses(self):
         for i in [1, 2, 3]:
             self.output.set('MSOFT', i, self.input.mg(i))
         self.output.set('MSOFT', 21, self.output.ewsb.mh1_sq)
         self.output.set('MSOFT', 22, self.output.ewsb.mh2_sq)
 
-        def assert_diagonal_matrix(matrix: np.ndarray, size: int):
-            assert isinstance(matrix, np.ndarray)
-            assert matrix.shape == (size, size)
-            for i in range(size):
-                for j in range(size):
-                    assert i == j or matrix[i, j] == 0
+        # Store according to SLHA2 scheme; for SLHA1 output, convert them to SLHA1 format when output.
+        self.output.set_matrix('VCKM', self.input.vckm())
+        self.output.set_matrix('IMVCKM', np.zeros((3, 3)))  # CPV ignored
+        self.output.set_matrix('UPMNS', self.input.upmns())
+        self.output.set_matrix('IMUPMNS', np.zeros((3, 3)))  # CPV ignored
+        for species in [A.U, A.D, A.E]:
+            y = np.diag(self.output.ewsb.yukawa(species))  # diagonal in super-CKM basis
+            self.output.set_matrix(species.out_y, y, diagonal_only=True)
 
-        if self.input.version == SLHAVersion.SLHA1:
-            for species in [A.U, A.D, A.E]:
-                matrix = self.input.a(species)
-                assert_diagonal_matrix(matrix, 3)
-                self.output.set(species.out_a, (3, 3), matrix[2, 2])
-            for species in [S.QL, S.UR, S.DR, S.LL, S.ER]:
-                m_sq = self.input.ms2(species)
-                assert_diagonal_matrix(m_sq, 3)
-                for gen in [1, 2, 3]:
-                    self.output.set('MSOFT', species.extpar + gen, m_sq[gen - 1, gen - 1] ** 0.5)
-            self.output.set('YU', (3, 3), self.output.ewsb.yu()[2])
-            self.output.set('YD', (3, 3), self.output.ewsb.yd()[2])
-            self.output.set('YE', (3, 3), self.output.ewsb.ye()[2])
-        else:
-            self.output.set_matrix('VCKM', self.input.vckm())
-            self.output.set_matrix('IMVCKM', np.zeros((3, 3)))  # CPV ignored
-            self.output.set_matrix('UPMNS', self.input.upmns())
-            self.output.set_matrix('IMUPMNS', np.zeros((3, 3)))  # CPV ignored
-            for species in [A.U, A.D, A.E]:
-                y = np.diag(self.output.ewsb.yukawa(species))  # diagonal in super-CKM basis
-                self.output.set_matrix(species.out_y, y, diagonal_only=True)
-
-                a = self.input.a(species)
-                if a is None:
-                    t = self.input.t(species)
-                else:
-                    t = y * a
-                self.output.set_matrix(species.out_t, t)
-            for species in [S.QL, S.UR, S.DR, S.LL, S.ER]:
-                self.output.set_matrix(species.slha2_output, self.input.ms2(species))
+            a = self.input.a(species)
+            if a is None:
+                t = self.input.t(species)
+            else:
+                t = y * a
+            self.output.set_matrix(species.out_t, t)
+        for species in [S.QL, S.UR, S.DR, S.LL, S.ER]:
+            self.output.set_matrix(species.slha2_output, self.input.ms2(species))
 
     def _calculate_higgses(self):
         assert self.output.ewsb.is_set()
@@ -288,66 +428,16 @@ class Calculator(AbsCalculator):
         self.output.set_mass(1000021, self.output.get('MSOFT', 3))
 
     def _calculate_sfermion(self):
-        if self.input.version == SLHAVersion.SLHA1:
-            return self._calculate_sfermion_slha1()
-        else:
-            return self._calculate_sfermion_slha2()
-
-    def _calculate_sfermion_slha1(self):
-        mz2_cos2b = self.output.sm.mz()**2 * tan2costwo(self.output.ewsb.tan_beta)
-        sw2 = self.output.sm.sin_w_sq()
-        mu_tan_b = self.output.ewsb.mu * self.output.ewsb.tan_beta
-        mu_cot_b = self.output.ewsb.mu / self.output.ewsb.tan_beta
-
-        # SLHA Eq.23-25 and SUSY Primer (8.4.18)
-        def mass_matrix(right: S, gen: int) -> np.ndarray:
-            if right == S.UR:
-                (left, a_species, mf) = (S.QL, A.U, self.output.sm.mass_u()[gen - 1])
-                dl, dr, mu = (1 / 2 - 2 / 3 * sw2), 2 / 3 * sw2, mu_cot_b
-            elif right == S.DR:
-                (left, a_species, mf) = (S.QL, A.D, self.output.sm.mass_d()[gen - 1])
-                dl, dr, mu = -(1 / 2 - 1 / 3 * sw2), -1 / 3 * sw2, mu_tan_b
-            elif right == S.ER:
-                (left, a_species, mf) = (S.LL, A.E, self.output.sm.mass_e()[gen - 1])
-                dl, dr, mu = -(1 / 2 - sw2), -sw2, mu_tan_b
-            else:
-                raise NotImplementedError
-            msl = self.output.get_float('MSOFT', left.extpar + gen)
-            msr = self.output.get_float('MSOFT', right.extpar + gen)
-            a = self.output.get(a_species.out_a, (gen, gen)) if gen == 3 else 0
-
-            return np.array([
-                [msl**2 + mf**2 + dl * mz2_cos2b, mf * (a - mu)],
-                [mf * (a - mu), msr**2 + mf**2 + dr * mz2_cos2b]])
-
-        def sneutrino_mass(gen: int)->float:
-            msl = self.output.get_float('MSOFT', S.LL.extpar + gen)
-            mf = self.output.sm.mass_n()[gen - 1]
-            dl = 1 / 2
-            return msl**2 + mf**2 + dl * mz2_cos2b
-
-        for (right, pid, mix_name) in ((S.UR, 6, 'STOPMIX'), (S.DR, 5, 'SBOTMIX'), (S.ER, 15, 'STAUMIX')):
-            mass_sq, f = mass_diagonalization(mass_matrix(right, 3))
-            self.output.set_mass(1000000 + pid, mass_sq[0]**0.5)
-            self.output.set_mass(2000000 + pid, mass_sq[1]**0.5)
-            self.output.set_matrix(mix_name, f)
-
-        for gen in [1, 2]:
-            for (right, pid) in ((S.UR, 2), (S.DR, 1), (S.ER, 11)):
-                mass_sq = mass_matrix(right, gen)
-                self.output.set_mass(1000000 + pid + 2 * (gen - 1), mass_sq[0, 0]**0.5)
-                self.output.set_mass(2000000 + pid + 2 * (gen - 1), mass_sq[1, 1]**0.5)
-
-        for gen in [1, 2, 3]:
-            self.output.set_mass(1000010 + 2 * gen, sneutrino_mass(gen)**0.5)
-
-    def _calculate_sfermion_slha2(self):
         mz2_cos2b = np.diag([1, 1, 1]) * self.output.sm.mz()**2 * tan2costwo(self.output.ewsb.tan_beta)
         sw2 = self.output.sm.sin_w_sq()
         mu_tan_b = self.output.ewsb.mu * self.output.ewsb.tan_beta
         mu_cot_b = self.output.ewsb.mu / self.output.ewsb.tan_beta
         ckm = self.output.get_matrix('VCKM')
+        if ckm is None:
+            ckm = np.diag([1, 1, 1])
         pmns = self.output.get_matrix('UPMNS')
+        if pmns is None:
+            pmns = np.diag([1, 1, 1])
 
         def dag(m: np.ndarray) -> np.ndarray:
             return np.conjugate(m.T)
@@ -413,3 +503,94 @@ class Calculator(AbsCalculator):
         self.output.set_mass(1000014, mass_sq[1]**0.5)
         self.output.set_mass(1000016, mass_sq[2]**0.5)
         self.output.set_matrix('SNUMIX', prettify_matrix(f))
+
+    def convert_slha2_to_slha1(self):
+        if not (self.cpv == CPV.NONE and self.flv == FLV.NONE):
+            self.add_error('SLHA1 does not support Flavor/CP violations.')
+            return
+        # soft masses
+        for species in S:
+            for gen in (1, 2, 3):
+                self.output.set('MSOFT', species.extpar + gen, self.output.get(species.slha2_output, (gen, gen)) ** 0.5)
+            self.output.remove_block(species.slha2_output)
+
+        # A-terms and yukawas: only (3,3) elements are allowed
+        for species in A:
+            a33 = self.output.get(species.out_t, (3, 3)) / self.output.get(species.out_y, (3, 3))
+            self.output.set(species.out_a, (3, 3), a33)
+            self.output.remove_block(species.out_t)
+            for i in (1, 2):
+                self.output.remove_value(species.out_y, (i, i))
+
+        # mass and mixing: quark flavor rotation is reverted.
+        pid_base = (1000001, 1000003, 1000005, 2000001, 2000003, 2000005)
+        self._reorder_no_flv_mixing_matrix('USQMIX', [pid + 1 for pid in pid_base], lighter_lr_mixing=False)
+        self._reorder_no_flv_mixing_matrix('DSQMIX', [pid for pid in pid_base], lighter_lr_mixing=False)
+        self._reorder_no_flv_mixing_matrix('SELMIX', [pid + 10 for pid in pid_base], lighter_lr_mixing=False)
+        self._reorder_no_flv_mixing_matrix('SNUMIX', [1000012, 1000014, 1000016], lighter_lr_mixing=False)
+
+        for slha2, slha1 in (('USQMIX', 'STOPMIX'), ('DSQMIX', 'SBOTMIX'), ('SELMIX', 'STAUMIX')):
+            r = self.output.get_matrix(slha2)
+            self.output.set(slha1, (1, 1), r[2][2])
+            self.output.set(slha1, (1, 2), r[2][5])
+            self.output.set(slha1, (2, 1), r[5][2])
+            self.output.set(slha1, (2, 2), r[5][5])
+            self.output.remove_block(slha2)
+
+        assert is_diagonal_matrix(self.output.get_matrix('SNUMIX'))
+        self.output.remove_block('SNUMIX')
+
+        # remove SLHA2 blocks
+        for block_name in ('VCKM', 'IMVCKM', 'UPMNS', 'IMUPMNS'):
+            self.output.remove_block(block_name)
+
+    def _reorder_no_flv_mixing_matrix(self, matrix_name: str, pids: List[int], lighter_lr_mixing: bool = True):
+        mixing = self.output.get_matrix(matrix_name)
+
+        assert isinstance(mixing, np.ndarray)
+        assert len(mixing.shape) == 2 and mixing.shape[0] == mixing.shape[1] and mixing.shape[0] in (3, 6)
+
+        def failed():
+            raise RuntimeError(f'SLHA2 to SLHA1 conversion failed: {mixing}')
+
+        threshold = 1e-10
+        n = mixing.shape[0]
+        order = [-1 for i in range(n)]
+        for j in range(1, n + 1):
+            states = list()
+            for i in range(1, n + 1):
+                if abs(mixing[i - 1][j - 1]) > threshold:
+                    states.append(i)
+            if not 1 <= len(states) <= n // 3:
+                failed()
+            if n == 6 and (j % 3 == 0 or lighter_lr_mixing):  # with left-right mixing
+                if len(states) == 2:
+                    if j < 4:
+                        order[j - 1], order[j + 2] = states
+                    else:
+                        if not (order[j - 4] == states[0] and order[j - 1] == states[1]):
+                            failed()
+                else:  # (1,0)(0,1) or (0,1)(1,0)
+                    order[j - 1] = states[0]
+                    if j > 3 and order[j - 4] > order[j - 1]:
+                        order[j - 4], order[j - 1] = order[j - 1], order[j - 4]
+            else:
+                if len(states) == 1:
+                    order[j - 1] = states[0]
+                else:
+                    if abs(mixing[states[0] - 1][j - 1]) < abs(mixing[states[1] - 1][j - 1]):
+                        major, minor = states[1], states[0]
+                    else:
+                        major, minor = states[0], states[1]
+                    if abs(mixing[minor - 1][j - 1] > 0.01):
+                        self.add_warning(f'large mixing {mixing[minor-1][j-1]} found in {pids[minor-1]}')
+                    order[j - 1] = major
+                for i in range(1, n + 1):
+                    mixing[i - 1][j - 1] = 1 if i == order[j - 1] else 0  # to chop the left-right mixing
+
+        masses = [self.output.mass(p) for p in pids]
+        new_mixing = mixing.copy()
+        for i in range(n):
+            new_mixing[i] = mixing[order[i] - 1]
+            self.output.set_mass(pids[i], masses[order[i] - 1])
+        self.output.set_matrix(matrix_name, new_mixing)

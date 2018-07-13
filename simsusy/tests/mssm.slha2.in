@@ -1,5 +1,6 @@
 BLOCK MODSEL
      1     1                # msugra based
+     6     1
 #
 BLOCK SMINPUTS
      1     127.934          # alpha^(-1)

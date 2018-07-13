@@ -1,15 +1,24 @@
 import logging
 import json
 import pathlib
-from typing import TYPE_CHECKING, List, Optional  # noqa: F401
+from typing import TYPE_CHECKING, List, Optional, Union  # noqa: F401
 if TYPE_CHECKING:
     from simsusy.mssm.input import MSSMInput  # noqa: F401
 
 logger = logging.getLogger(__name__)
+CFloat = Union[complex, float]
 
 
 class AbsSMParameters():
     DEFAULT_DATA = pathlib.Path(__file__).parent.parent.resolve() / 'default_values.json'
+
+    def default_value(self, key: str)->float:
+        default = self.default_values.get(key)
+        if isinstance(default, dict):
+            value = default.get('value')
+            if isinstance(value, float):
+                return value
+        raise RuntimeError(f'Invalid parameter {key} in {self.DEFAULT_DATA}, which must be float.')
 
     def __init__(self, input):  # type: (MSSMInput) -> None
         with open(self.DEFAULT_DATA) as f:
@@ -19,18 +28,8 @@ class AbsSMParameters():
             value = input.sminputs(key)
             if isinstance(value, float):
                 return value
-            if key <= 7:
-                logger.warning(f'Block SMINPUTS {key} is not specified; default value is used.')
-            else:
-                logger.debug(f'Block SMINPUTS {key} is not specified; default value is used.')
-
-            default = self.default_values.get(default_key)
-            if isinstance(default, dict):
-                value = default.get('value')
-                if isinstance(value, float):
-                    return value
-            else:
-                raise RuntimeError(f'Invalid parameter {default_key} in {self.DEFAULT_DATA}, which must be float.')
+            logger.info(f'Block SMINPUTS {key} is not specified; default value is used.')
+            return self.default_value(default_key)
 
         self._alpha_em_inv = get(1, 'alpha_EW_inverse@m_Z')  # MS-bar, with 5 active flavors
         self._g_fermi = get(2, 'G_F')
@@ -101,26 +100,34 @@ class AbsSMParameters():
 
 class AbsEWSBParameters():
     def __init__(self, model):  # type: (MSSMInput) -> None
-        self.mh1_sq = model.get_float('EXTPAR', 21)  # type: Optional[float]
-        self.mh2_sq = model.get_float('EXTPAR', 22)  # type: Optional[float]
-        self.mu = model.get_float('EXTPAR', 23)      # type: Optional[float]
-        self.ma_sq = model.get_float('EXTPAR', 24)   # type: Optional[float]
-        self.ma0 = model.get_float('EXTPAR', 26)     # type: Optional[float]
-        self.mhc = model.get_float('EXTPAR', 27)     # type: Optional[float]
+        self.mh1_sq = model.get_complex('EXTPAR', 21)  # type: Optional[CFloat]
+        self.mh2_sq = model.get_complex('EXTPAR', 22)  # type: Optional[CFloat]
+        self.mu = model.get_complex('EXTPAR', 23)      # type: Optional[CFloat]
+        self.ma_sq = model.get_complex('EXTPAR', 24)   # type: Optional[CFloat]
+        self.ma0 = model.get_complex('EXTPAR', 26)     # type: Optional[CFloat]
+        self.mhc = model.get_complex('EXTPAR', 27)     # type: Optional[CFloat]
 
-        self.tan_beta = model.get_float('EXTPAR', 25) or model.get_float('MINPAR', 3)  # type: Optional[float]
+        self.tan_beta = model.get_complex('EXTPAR', 25) or model.get_complex('MINPAR', 3)  # type: Optional[CFloat]
         if self.tan_beta is None:
             raise ValueError('tanbeta not specified.')
 
         sign_mu = model.get('MINPAR', 4)
-        if not(sign_mu is None or 0.9 < abs(sign_mu) < 1.1):
-            raise ValueError(f'Invalid EXTPAR 4; either 1 or -1.')
-        self.sign_mu = (1 if sign_mu > 0 else -1) if sign_mu is not None else None  # type: Optional[int]
+        sin_phi_mu = model.get('IMMINPAR', 4)
+        if sin_phi_mu:  # CPV
+            if sign_mu is None or not(0.99 < sign_mu ** 2 + sin_phi_mu ** 2 < 1.01):
+                raise ValueError('Invalid mu-phase (MINPAR 4 and IMMINPAR 4)')
+            sign_mu = complex(sign_mu, sin_phi_mu)
+            sign_mu /= abs(self.sign_mu)
+        else:
+            if not(sign_mu is None or 0.9 < abs(sign_mu) < 1.1):
+                raise ValueError(f'Invalid EXTPAR 4; either 1 or -1.')
+            sign_mu = (1 if sign_mu > 0 else -1) if sign_mu is not None else None
+        self.sign_mu = sign_mu  # type: Union[complex, int, None]
 
         unspecified_param_count = self._count_unspecified_params()
         if unspecified_param_count > 4:
-            self.mh1_sq = self.mh1_sq or model.get('MINPAR', 1) ** 2
-            self.mh2_sq = self.mh2_sq or model.get('MINPAR', 1) ** 2
+            self.mh1_sq = self.mh1_sq or model.get_complex('MINPAR', 1) ** 2
+            self.mh2_sq = self.mh2_sq or model.get_complex('MINPAR', 1) ** 2
         self.validate()
 
     def _count_unspecified_params(self)->int:

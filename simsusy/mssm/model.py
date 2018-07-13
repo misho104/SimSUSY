@@ -1,4 +1,4 @@
-from simsusy.abs_model import AbsModel, SLHAVersion
+from simsusy.abs_model import AbsModel
 from simsusy.mssm.abstract import AbsSMParameters, AbsEWSBParameters   # noqa: F401
 from simsusy.mssm.input import MSSMInput, S, A  # noqa: F401
 from typing import Optional, List, Dict  # noqa: F401
@@ -13,27 +13,9 @@ class MSSMModel(AbsModel):
         self.sm = None       # type: Optional[AbsSMParameters]
         self.ewsb = None     # type: Optional[AbsEWSBParameters]
 
-        self.version = SLHAVersion.SLHA1  # SLHAVersion
-
-    def write(self,
-              filename: Optional[str]=None,
-              ignorenobr: bool=True,
-              precision: int=8,
-              feynrules_mode=False,
-              remove_gauge_block=False,   # TODO: more proper way....
-              ) -> None:
+    def write(self, filename: Optional[str]=None, ignorenobr: bool=True, precision: int=8) -> None:
         self._prepare_info()
-
         self._prepare_input_parameters()
-        self._prepare_sm_ewsb(feynrules_mode=feynrules_mode)
-        if remove_gauge_block:
-            self.remove_block('GAUGE')
-        for tmp in ['NMIX', 'UMIX', 'VMIX', 'ALPHA', 'FRALPHA', 'HMIX', 'GAUGE', 'MSOFT',
-                    'MSQ2', 'MSU2', 'MSD2', 'MSL2', 'MSE2',
-                    'STOPMIX', 'SBOTMIX', 'STAUMIX', 'USQMIX', 'DSQMIX', 'SELMIX', 'SNUMIX',
-                    'AU', 'AD', 'AE', 'TU', 'TD', 'TE', 'YU', 'YD', 'YE']:
-            if self.block(tmp):
-                self.set_q(tmp, 200)
         super().write(filename, ignorenobr, precision)
 
     def _prepare_info(self):
@@ -43,28 +25,8 @@ class MSSMModel(AbsModel):
                     if value:
                         self.set(name, key, value)
 
-    def _prepare_sm_ewsb(self, feynrules_mode: bool = False):
-        assert self.sm is not None
-        assert self.ewsb is not None
-
-        # isinstance(self.ewsb, EWSBParameters)
-        for pid in [5, 6, 15, 23, 24]:
-            self.set_mass(pid, self.sm.mass(pid))
-        if feynrules_mode:
-            self.set('FRALPHA', 1, self.ewsb.alpha())
-        else:
-            self.set('ALPHA', None, self.ewsb.alpha())
-        self.set('HMIX', 1, self.ewsb.mu)
-        self.set('HMIX', 2, self.ewsb.tan_beta)
-        self.set('HMIX', 3, self.sm.vev())
-        self.set('HMIX', 4, self.ewsb.ma_sq)
-        self.set('GAUGE', 1, self.sm.gy())
-        self.set('GAUGE', 2, self.sm.gw())
-        self.set('GAUGE', 3, self.sm.gs())
-
     def _prepare_input_parameters(self):
         assert self.input is not None
-        self.version = self.input.version
 
         for block_name, key_max in [('VCKMIN', 4), ('UPMNSIN', 6)]:
             block = self.input.block(block_name)

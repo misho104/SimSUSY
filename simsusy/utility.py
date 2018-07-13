@@ -67,6 +67,20 @@ def chop_matrix(m: np.ndarray, threshold=1E-7):
     return m
 
 
+def is_real_matrix(m: np.ndarray):
+    for (i, j), v in np.ndenumerate(m):
+        if isinstance(v, complex):
+            return False
+    return True
+
+
+def is_diagonal_matrix(m: np.ndarray):
+    for (i, j), v in np.ndenumerate(m):
+        if i != j and v:
+            return False
+    return True
+
+
 def autonne_takagi(m: np.ndarray, try_real_mixing=True)->Tuple[np.ndarray, np.ndarray]:
     """Perform Autonne-Takagi decomposition.
 

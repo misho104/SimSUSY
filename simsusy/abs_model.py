@@ -1,4 +1,3 @@
-import enum
 import pyslha
 import pathlib
 import numpy as np
@@ -7,11 +6,6 @@ from typing import Dict, Optional, Sequence, List, Tuple, Union, Any, MutableMap
 from simsusy.pyslha_customize import KeyType, ValueType, CommentType, writeSLHABlocks, writeSLHADecays
 pyslha.writeSLHABlocks = writeSLHABlocks
 pyslha.writeSLHADecays = writeSLHADecays
-
-
-class SLHAVersion(enum.Enum):
-    SLHA1 = 1
-    SLHA2 = 2
 
 
 class AbsModel:
@@ -50,6 +44,16 @@ class AbsModel:
             except KeyError:
                 pass
         return default
+
+    def get_complex(self, block_name: str, key, default=None)->Union[float, complex, None]:
+        real = self.get_float(block_name, key)
+        imaginary = self.get('IM' + block_name, key)
+        if real is None and imaginary is None:
+            return default
+        elif imaginary:
+            return complex(0 if real is None else real, imaginary)
+        else:
+            return real
 
     def get_float(self, block_name: str, key, default=None)->Optional[float]:
         value = self.get(block_name, key, default)
@@ -102,13 +106,13 @@ class AbsModel:
                     continue
                 self.set(block_name, (i + 1, j + 1), matrix[i, j])
 
-    def get_matrix(self, block_name: str)->np.ndarray:
+    def get_matrix(self, block_name: str)->Optional[np.ndarray]:
         cache = self._matrix_cache.get(block_name)
         if isinstance(cache, np.ndarray):
             return cache
         block = self.block(block_name)
         if not block:
-            return np.array()
+            return None
         nx_ny = max(block.keys())
         assert isinstance(nx_ny, tuple) and len(nx_ny) == 2 and all(isinstance(nx_ny[i], int) for i in nx_ny)
         matrix = np.zeros(nx_ny)
@@ -129,6 +133,10 @@ class AbsModel:
             del self._slha.blocks[tuple(block_name.upper())]
         except KeyError:
             pass
+
+    def remove_value(self, block_name, key):
+        if self.get(block_name, key) is not None:
+            del self._slha.blocks[block_name].entries[key]
 
     def write(self, filename: Optional[str]=None, ignorenobr: bool=True, precision: int=8) -> None:
         """provide own version of write, because pyslha.Doc.write has a bug."""
