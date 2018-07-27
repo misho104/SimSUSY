@@ -21,7 +21,10 @@ setup(
     name='simsusy',
     version=version,
     packages=packages,
-    install_requires=['click', 'pyslha', 'numpy'],
+    install_requires=['click', 'yaslha', 'numpy'],
+    dependency_links=[
+      'git+https://github.com/misho104/yaslha.git#egg=yaslha'
+    ],
     entry_points={
         'console_scripts': 'simsusy = simsusy.simsusy:simsusy_main'
     },

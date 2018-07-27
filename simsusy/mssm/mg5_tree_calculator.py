@@ -2,7 +2,7 @@ import logging
 from collections import OrderedDict
 from typing import List, Optional  # noqa: F401
 
-import pyslha
+import yaslha
 
 from simsusy.mssm.library import CPV, FLV
 import simsusy.simsusy
@@ -29,14 +29,12 @@ class Calculator(simsusy.mssm.tree_calculator.Calculator):
         self._reorder_no_flv_mixing_matrix('SNUMIX', [1000012, 1000014, 1000016], lighter_lr_mixing=False)
 
         # prepare DECAY blocks with zero width, since mg5's `compute_width` fails if these are not provided.
-        if not self.output._slha.decays:
-            self.output._slha.decays = OrderedDict()
         for pid in [6, 23, 24]:
-            self.output._slha.decays[pid] = pyslha.Particle(pid, 0)
+            self.output.decays[pid] = yaslha.Decay(pid)
 #            if self.output.mass(pid) is None:
 #                self.output.set_mass(pid, self.output.ewsb.mass(pid))
         for pid in self.output.block('MASS').keys():
-            self.output._slha.decays[pid] = pyslha.Particle(pid, 0)
+            self.output.decays[pid] = yaslha.Decay(pid)
 
         # remove unsupported blocks (IMVCKM, IMUPMNS, GAUGE)
         for name in ['IMVCKM', 'IMUPMNS']:
@@ -51,6 +49,14 @@ class Calculator(simsusy.mssm.tree_calculator.Calculator):
         # use FRALPHA insstead of ALPHA
         self.output.set('FRALPHA', 1, self.output.get('ALPHA', None))
         self.output.remove_block('ALPHA')
+
+        # dumper configuration
+        self.output.dumper = yaslha.dumper.SLHADumper(
+            separate_blocks=True,
+            document_blocks=[
+                'MODSEL', 'MINPAR', 'EXTPAR',
+                'VCKMIN', 'UPMNSIN', 'MSQ2IN', 'MSU2IN', 'MSD2IN', 'MSL2IN', 'MSE2IN', 'TUIN', 'TDIN', 'TEIN',
+            ])
 
         # done
         super().write_output(filename, slha1)

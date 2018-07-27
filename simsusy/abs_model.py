@@ -1,49 +1,30 @@
-import pyslha
 import pathlib
-import numpy as np
 from typing import Dict, Optional, Sequence, List, Tuple, Union, Any, MutableMapping  # noqa: F401
 
-from simsusy.pyslha_customize import KeyType, ValueType, CommentType, writeSLHABlocks, writeSLHADecays
-pyslha.writeSLHABlocks = writeSLHABlocks
-pyslha.writeSLHADecays = writeSLHADecays
+import numpy as np
+import yaslha
 
 
-class AbsModel:
+class AbsModel(yaslha.SLHA):
     """Abstract model as a wrapper of a SLHA object."""
 
-    def __init__(self, obj: Union[pyslha.Doc, str, None]=None)->None:
-        self._matrix_cache = dict()  # type: Dict[str, np.ndarray]
+    def __init__(self, obj: Union[None, str, pathlib.Path]=None)->None:
         if obj is None:
-            self._slha = pyslha.Doc(blocks=pyslha._dict('Blocks'))
-        elif isinstance(obj, pyslha.Doc):
-            self._slha = obj
-        elif isinstance(obj, pathlib.Path):
-            self._slha = pyslha.readSLHAFile(str(obj), ignorenomass=True)
-        elif isinstance(obj, str):
-            if '\n' in obj or '\r' in obj:
-                # if multiline, assume obj as the SLHA content.
-                self._slha = pyslha.readSLHA(obj, ignorenomass=True)
-            else:
-                # if single line, it is a file path.
-                self._slha = pyslha.readSLHAFile(obj, ignorenomass=True)
+            super().__init__()
+        elif isinstance(obj, str) and ('\n' in obj or '\r' in obj):
+            super().__init__(yaslha.parse(obj))        # multiline: SLHA data itself
         else:
-            raise ValueError('invalid initialization of Model')
+            super().__init__(yaslha.parse_file(obj))   # singleline: file path
 
-    def block(self, name: str) -> Optional[pyslha.Block]:
-        try:
-            return self._slha.blocks[name.upper()]
-        except KeyError:
-            return None
+        self._matrix_cache = dict()  # type: Dict[str, np.ndarray]
+        self.dumper = None           # type: Optional[yaslha.dumper.SLHADumper]
 
-    def get(self, block_name: str, key, default=None) -> Any:
-        # we introduce this because pyslha.get raises keyerror if block is not found.
-        block = self.block(block_name)
-        if block:
-            try:
-                return block[key]
-            except KeyError:
-                pass
-        return default
+    def block(self, block_name: str)->Optional[yaslha.Block]:
+        return self.blocks.get(block_name.upper(), None)
+
+    def get_float(self, block_name: str, key, default=None)->Optional[float]:
+        value = self.get(block_name, key, default)
+        return None if value is None else float(value)
 
     def get_complex(self, block_name: str, key, default=None)->Union[float, complex, None]:
         real = self.get_float(block_name, key)
@@ -55,44 +36,21 @@ class AbsModel:
         else:
             return real
 
-    def get_float(self, block_name: str, key, default=None)->Optional[float]:
-        value = self.get(block_name, key, default)
-        return None if value is None else float(value)
-
     def mass(self, pid: int)->Optional[float]:
         return self.get('MASS', pid)
 
-    def width(self, pid: int)->Optional[float]:
+    def width(self, pid: int)->float:
         try:
-            return self._slha.decays[pid].totalwidth
+            return self.decays[pid].width
         except KeyError:
             return None
 
-    def br(self, pid: int, *daughters: int) -> Optional[float]:
-        n_decay = len(daughters)
-        sorted_daughters = sorted(daughters)
+    def br_list(self, pid: int)->Optional[MutableMapping[Tuple[int, ...], float]]:
         try:
-            particle = self._slha.decays[pid]
+            decay = self.decays[pid]
         except KeyError:
             return None
-        for c in particle.decays:
-            if n_decay == c.nda and sorted(c.ids) == sorted_daughters:
-                return c.br
-        return 0
-
-    def br_list(self, pid: int) -> Optional[Dict[Sequence[int], float]]:
-        try:
-            particle = self._slha.decays[pid]
-        except KeyError:
-            return None
-        return dict([(tuple(sorted(c.ids)), c.br) for c in particle.decays])
-
-    def set(self, block_name: str, key: KeyType, value: ValueType, comment: CommentType='')->None:
-        block_name = block_name.upper()
-        if self.block(block_name) is None:
-            self._slha.blocks[block_name] = pyslha.Block(block_name)
-        self._slha.blocks[block_name][key] = value
-        # TODO: handle comment...
+        return dict([(tuple(sorted(k)), v) for k, v in decay.items_br()])
 
     def set_mass(self, key: int, mass: float)->None:  # just a wrapper
         self.set('MASS', key, mass)
@@ -122,39 +80,34 @@ class AbsModel:
         self._matrix_cache[block_name] = matrix
         return self._matrix_cache[block_name]
 
-    def set_q(self, block_name, q: float):
-        block_name = block_name.upper()
-        if self.block(block_name) is None:
-            self._slha.blocks[block_name] = pyslha.Block(block_name)
-        self._slha.blocks[block_name].q = q
-
     def remove_block(self, block_name):
         try:
-            del self._slha.blocks[tuple(block_name.upper())]
+            del self.blocks[block_name.upper()]
         except KeyError:
             pass
 
     def remove_value(self, block_name, key):
-        if self.get(block_name, key) is not None:
-            del self._slha.blocks[block_name].entries[key]
+        try:
+            del self.blocks[block_name][key]
+        except KeyError:
+            pass
 
-    def write(self, filename: Optional[str]=None, ignorenobr: bool=True, precision: int=8) -> None:
-        """provide own version of write, because pyslha.Doc.write has a bug."""
+    def write(self, filename: Optional[str]=None)->None:
+        dumper = self.dumper or yaslha.dumper.SLHADumper(separating_line=True)
+        slha_text = yaslha.dump(self, dumper=dumper)
+
+        # append trivial comments because some old tools requires a comment on every line,
+        # TODO: change the content to meaningful ones
+        lines = slha_text.splitlines()
+        for i, v in enumerate(lines):
+            if len(v) != 1 and v.endswith('#'):
+                lines[i] = v + ' ...'
+        slha_text = '\n'.join(lines)
+
         if filename is None:
-            print(pyslha.writeSLHA(self._slha, ignorenobr=ignorenobr, precision=precision))
+            # print(yaslha.dump(self, dumper=dumper))
+            print(slha_text)
         else:
-            pyslha.write(filename, self._slha, ignorenobr=ignorenobr, precision=precision)
-
-
-class Info:
-    def __init__(self, name: str, version: str)->None:
-        self.name = name          # type: str
-        self.version = version    # type: str
-        self.errors = list()      # type: List[str]
-        self.warnings = list()    # type: List[str]
-
-    def add_error(self, msg: str):
-        self.errors.append(msg)
-
-    def add_warning(self, msg: str):
-        self.warnings.append(msg)
+            # yaslha.dump_file(self, filename, dumper=dumper)
+            with open(filename, 'w') as f:
+                f.write(slha_text)

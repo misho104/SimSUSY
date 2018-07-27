@@ -8,22 +8,12 @@ class MSSMModel(AbsModel):
     def __init__(self, *args):
         super().__init__(*args)
         self.input = None    # type: Optional[MSSMInput]
-        self.spinfo = None   # type: Optional[Info]
-        self.dcinfo = None   # type: Optional[Info]
         self.sm = None       # type: Optional[AbsSMParameters]
         self.ewsb = None     # type: Optional[AbsEWSBParameters]
 
-    def write(self, filename: Optional[str]=None, ignorenobr: bool=True, precision: int=8) -> None:
-        self._prepare_info()
+    def write(self, filename: Optional[str]=None)->None:
         self._prepare_input_parameters()
-        super().write(filename, ignorenobr, precision)
-
-    def _prepare_info(self):
-        for name, info in [('SPINFO', self.spinfo), ('DCINFO', self.dcinfo)]:
-            if info:
-                for key, value in [(1, info.name), (2, info.version), (3, info.errors), (4, info.warnings)]:
-                    if value:
-                        self.set(name, key, value)
+        super().write(filename)
 
     def _prepare_input_parameters(self):
         assert self.input is not None

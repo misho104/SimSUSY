@@ -1,5 +1,4 @@
 import simsusy.simsusy
-from simsusy.abs_model import Info
 from simsusy.abs_calculator import AbsCalculator
 from simsusy.mssm.model import MSSMModel as Output
 from simsusy.mssm.input import MSSMInput as Input
@@ -198,8 +197,8 @@ class Calculator(AbsCalculator):
                 self.add_warning('SLHA1 does not support CPV/FLV.')
         for tmp in ['HMIX', 'GAUGE', 'MSOFT', 'MSQ2', 'MSU2', 'MSD2', 'MSL2', 'MSE2',
                     'AU', 'AD', 'AE', 'TU', 'TD', 'TE', 'YU', 'YD', 'YE']:
-            if self.output.block(tmp):
-                self.output.set_q(tmp, 200)  # TODO: more proper way...
+            if tmp in self.output.blocks:
+                self.output.blocks[tmp].q = 200  # TODO: more proper way...
         self.output.write(filename)
 
     def _load_modsel(self):
@@ -239,9 +238,7 @@ class Calculator(AbsCalculator):
             self.add_error(f'invalid EWSB specification ({e})')
 
     def _check_other_input_validity(self):
-        for block in self.input._slha.blocks:
-            name = ''.join(block)
-            content = self.input._slha.blocks[block]
+        for name, content in self.input.blocks.items():
             if name in ['MODSEL', 'SMINPUTS', 'VCKMIN', 'UPMNSIN']:
                 pass  # validity is checked when it is loaded
             elif name == 'MINPAR':
@@ -318,12 +315,12 @@ class Calculator(AbsCalculator):
 
     def calculate(self):
         self.output.input = self.input
-        self.output.spinfo = Info(self.name, self.version)
         self._load_modsel()
         self._load_sminputs()
         self._load_ewsb_parameters()
         self._check_other_input_validity()
         self._check_cpv_flv_consistency()
+        self._prepare_info()
         self._prepare_sm_ewsb()
         self._calculate_softmasses()
         self._calculate_higgses()
@@ -331,6 +328,12 @@ class Calculator(AbsCalculator):
         self._calculate_chargino()
         self._calculate_gluino()
         self._calculate_sfermion()
+
+    def _prepare_info(self):
+        self.output.set_info('SPINFO', 1, self.name)
+        self.output.set_info('SPINFO', 2, self.version)
+        self.output.set_info('SPINFO', 3, [])
+        self.output.set_info('SPINFO', 4, [])
 
     def _prepare_sm_ewsb(self):
         assert self.output.sm is not None
