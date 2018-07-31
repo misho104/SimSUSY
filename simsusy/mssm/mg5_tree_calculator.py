@@ -1,5 +1,4 @@
 import logging
-from collections import OrderedDict
 from typing import List, Optional  # noqa: F401
 
 import yaslha
