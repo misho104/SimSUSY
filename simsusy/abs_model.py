@@ -93,7 +93,7 @@ class AbsModel(yaslha.SLHA):
             pass
 
     def write(self, filename: Optional[str]=None)->None:
-        dumper = self.dumper or yaslha.dumper.SLHADumper(separating_line=True)
+        dumper = self.dumper or yaslha.dumper.SLHADumper(separate_blocks=True)
         slha_text = yaslha.dump(self, dumper=dumper)
 
         # append trivial comments because some old tools requires a comment on every line,
