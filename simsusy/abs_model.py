@@ -102,7 +102,9 @@ class AbsModel(yaslha.SLHA):
         for i, v in enumerate(lines):
             if len(v) != 1 and v.endswith('#'):
                 lines[i] = v + ' ...'
-        slha_text = '\n'.join(lines)
+        slha_text = '\n'.join(lines) + '\n'
+        if dumper.forbid_last_linebreak:
+            slha_text = slha_text.rstrip()
 
         if filename is None:
             # print(yaslha.dump(self, dumper=dumper))
