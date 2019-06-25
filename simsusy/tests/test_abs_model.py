@@ -1,18 +1,21 @@
-from nose.tools import raises, ok_, eq_
-from simsusy.abs_model import AbsModel
-import pathlib
 import logging
+import pathlib
 import unittest
-logger = logging.getLogger('test_info')
+
+from nose.tools import eq_, ok_, raises
+
+from simsusy.abs_model import AbsModel
+
+logger = logging.getLogger("test_info")
 
 
 class TestAbsModelInitialization(unittest.TestCase):
     def setUp(self):
         self.working_dir = pathlib.Path(__file__).parent
         self.paths = [
-            self.working_dir / 'sample.slha',
-            self.working_dir / 'mssm.slha',
-            self.working_dir / 'mssm.slha2',
+            self.working_dir / "sample.slha",
+            self.working_dir / "mssm.slha",
+            self.working_dir / "mssm.slha2",
         ]
 
     def test_init_with_pathlib_path(self):
@@ -33,16 +36,16 @@ class TestAbsModelInitialization(unittest.TestCase):
 
     @raises(FileNotFoundError)
     def test_init_with_non_existing_files(self):
-        AbsModel('a_not_existing_file')
+        AbsModel("a_not_existing_file")
 
 
 class TestAbsModelWithGenericInput(unittest.TestCase):
     def setUp(self):
         self.working_dir = pathlib.Path(__file__).parent
-        self.slha = AbsModel(self.working_dir / 'sample.slha')
+        self.slha = AbsModel(self.working_dir / "sample.slha")
 
     def test_block_with_single_arg(self):
-        block = self.slha.block('OneArgBlock')
+        block = self.slha.block("OneArgBlock")
         ok_(block)
 
         eq_(block[1], 10)
@@ -59,7 +62,7 @@ class TestAbsModelWithGenericInput(unittest.TestCase):
         # self.assertAlmostEqual(block[14], -0.003)
 
     def test_block_with_two_args(self):
-        block = self.slha.block('DoubleArgBlock')
+        block = self.slha.block("DoubleArgBlock")
         ok_(block)
 
         eq_(block[1, 1], 1)
@@ -68,13 +71,13 @@ class TestAbsModelWithGenericInput(unittest.TestCase):
         eq_(block[2, 2], 4)
 
     def test_block_without_arg(self):
-        block = self.slha.block('noargblocka')
+        block = self.slha.block("noargblocka")
         ok_(block)
         self.assertAlmostEqual(block.q, 123456.789)
         self.assertAlmostEqual(block[None], 3.1415926535)
         self.assertAlmostEqual(block.get(), 3.1415926535)
 
-        block = self.slha.block('noargblockb')
+        block = self.slha.block("noargblockb")
         ok_(block)
         self.assertAlmostEqual(block.q, 123456.789)
         eq_(block[None], 0)
@@ -82,21 +85,21 @@ class TestAbsModelWithGenericInput(unittest.TestCase):
 
     def test_block_with_unusual_content(self):
         return NotImplemented  # TODO: do we really have to deal with this?
-        block = self.slha.block('unusualcase')
+        block = self.slha.block("unusualcase")
         ok_(block)
-        eq_(block[1], 'some calculator returns')
-        eq_(block[2], 'these kind of error messages')
-        eq_(block[3], 'which of course is not expected in slha format.')
+        eq_(block[1], "some calculator returns")
+        eq_(block[2], "these kind of error messages")
+        eq_(block[3], "which of course is not expected in slha format.")
 
     def test_get(self):
-        eq_(self.slha.get('OneArgBlock', 1), 10)
-        eq_(self.slha.get('DoubleArgBlock', (2, 2)), 4)
-        self.assertAlmostEqual(self.slha.get('noargblocka', None), 3.1415926535)
+        eq_(self.slha.get("OneArgBlock", 1), 10)
+        eq_(self.slha.get("DoubleArgBlock", (2, 2)), 4)
+        self.assertAlmostEqual(self.slha.get("noargblocka", None), 3.1415926535)
 
-        eq_(self.slha.get('OneArgBlock', 123456), None)
-        eq_(self.slha.get('NotExistingBlock', 1), None)
-        eq_(self.slha.get('OneArgBlock', 123456, 789), 789)
-        eq_(self.slha.get('NotExistingBlock', 1, 789), 789)
+        eq_(self.slha.get("OneArgBlock", 123456), None)
+        eq_(self.slha.get("NotExistingBlock", 1), None)
+        eq_(self.slha.get("OneArgBlock", 123456, 789), 789)
+        eq_(self.slha.get("NotExistingBlock", 1, 789), 789)
 
     def test_mass(self):
         eq_(self.slha.mass(6), 175)
@@ -125,7 +128,7 @@ class TestAbsModelWithGenericInput(unittest.TestCase):
         self.assertAlmostEqual(0, self.slha.br(1000005, 1, -2))
 
         eq_(self.slha.br(1234567, 8, 9), None)  # NONE for not existing particle
-        eq_(self.slha.br(1000005, 8, 9), 0)     # ZERO for not existing decay channel
+        eq_(self.slha.br(1000005, 8, 9), 0)  # ZERO for not existing decay channel
 
     def test_br_list(self):
         eq_(self.slha.br_list(123), None)

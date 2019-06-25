@@ -1,61 +1,67 @@
+import cmath
 from typing import Tuple
+
 import numpy as np
 import numpy.linalg as LA
-import cmath
 
 
-def sin2cos(sin: float)->float:
+def sin2cos(sin: float) -> float:
     """returns Cos[ArcSin[x]] assuming -pi/2 < x < pi/2."""
     return ((sin + 1) * (-sin + 1)) ** 0.5
 
 
-def cos2sin(sin: float)->float:
+def cos2sin(sin: float) -> float:
     """returns Sin[ArcCos[x]] assuming 0 < x < pi."""
     return ((sin + 1) * (-sin + 1)) ** 0.5
 
 
-def tan2sin(tan: float)->float:
+def tan2sin(tan: float) -> float:
     """returns Sin[ArcTan[x]] assuming -pi/2 < x < pi/2."""
-    return tan * (tan**2 + 1) ** (-0.5)
+    return tan * (tan ** 2 + 1) ** (-0.5)
 
 
-def tan2cos(tan: float)->float:
+def tan2cos(tan: float) -> float:
     """returns Cos[ArcTan[x]] assuming -pi/2 < x < pi/2."""
-    return (tan**2 + 1) ** (-0.5)
+    return (tan ** 2 + 1) ** (-0.5)
 
 
-def sin2tan(sin: float)->float:
+def sin2tan(sin: float) -> float:
     """returns Tan[ArcSin[x]] assuming -pi/2 < x < pi/2."""
     return sin * ((-sin + 1) * (sin + 1)) ** (-0.5)
 
 
-def cos2tan(cos: float)->float:
+def cos2tan(cos: float) -> float:
     """returns Tan[ArcCos[x]] assuming 0 < x < pi."""
     return ((1 - cos) * (1 + cos)) ** 0.5 / cos
 
 
-def tan2costwo(tan: float)->float:
+def tan2costwo(tan: float) -> float:
     """returns Cos[2*ArcTan[x]] assuming -pi/2 < x < pi/2."""
-    return (1 + tan) * (1 - tan) / (tan**2 + 1)
+    return (1 + tan) * (1 - tan) / (tan ** 2 + 1)
 
 
-def tan2sintwo(tan: float)->float:
+def tan2sintwo(tan: float) -> float:
     """returns Sin[2*ArcTan[x]] assuming -pi/2 < x < pi/2."""
-    return 2 * tan / (tan**2 + 1)
+    return 2 * tan / (tan ** 2 + 1)
 
 
-def tan2tantwo(tan: float)->float:
+def tan2tantwo(tan: float) -> float:
     """returns Tan[2*ArcTan[x]] assuming -pi/2 < x < pi/2."""
     return 2 * tan / (1 + tan) / (1 - tan)
 
 
-def chop_matrix(m: np.ndarray, threshold=1E-7):
+def chop_matrix(m: np.ndarray, threshold=1e-7):
     nx, ny = m.shape
     for ix in range(0, nx):
         for iy in range(0, ny):
             v = m[ix, iy]
             # chop element if smaller than "key entries"
-            if ix != iy and abs(v) < min(abs(m[ix, min(ix, ny - 1)]), abs(m[min(iy, nx - 1), iy])) * threshold:
+            if (
+                ix != iy
+                and abs(v)
+                < min(abs(m[ix, min(ix, ny - 1)]), abs(m[min(iy, nx - 1), iy]))
+                * threshold
+            ):
                 m[ix, iy] = 0
             # chop imaginary part if small
             elif v.real != 0 and v.imag != 0:
@@ -81,7 +87,9 @@ def is_diagonal_matrix(m: np.ndarray):
     return True
 
 
-def autonne_takagi(m: np.ndarray, try_real_mixing=True)->Tuple[np.ndarray, np.ndarray]:
+def autonne_takagi(
+    m: np.ndarray, try_real_mixing=True
+) -> Tuple[np.ndarray, np.ndarray]:
     """Perform Autonne-Takagi decomposition.
 
     :param m: an input matrix M.
@@ -102,7 +110,9 @@ def autonne_takagi(m: np.ndarray, try_real_mixing=True)->Tuple[np.ndarray, np.nd
     return chop_matrix((np.conjugate(n) @ m @ np.conjugate(n.T))).diagonal(), n
 
 
-def singular_value_decomposition(m: np.ndarray)->Tuple[np.ndarray, np.ndarray, np.ndarray]:
+def singular_value_decomposition(
+    m: np.ndarray
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Perform singular value decomposition.
 
     :param m: an input matrix M.
@@ -116,7 +126,7 @@ def singular_value_decomposition(m: np.ndarray)->Tuple[np.ndarray, np.ndarray, n
     return d, chop_matrix(u), chop_matrix(v)
 
 
-def mass_diagonalization(m: np.ndarray)->Tuple[np.ndarray, np.ndarray]:
+def mass_diagonalization(m: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     """Perform mass diagonalization.
 
     :param m: an input matrix M, which is Hermitian.

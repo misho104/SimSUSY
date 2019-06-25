@@ -2,50 +2,62 @@ import logging
 import math
 import random
 import unittest
-import numpy as np
-from nose.tools import ok_, eq_  # noqa
-import simsusy.utility as u
 from typing import Optional  # noqa
 
-logger = logging.getLogger('test_info')
+import numpy as np
+from nose.tools import eq_, ok_  # noqa
+
+import simsusy.utility as u
+
+logger = logging.getLogger("test_info")
 
 
 class TestUtility(unittest.TestCase):
-    def __assert_sub(self, test: bool, msg: str, a: np.ndarray, b: Optional[np.ndarray]=None):
+    def __assert_sub(
+        self, test: bool, msg: str, a: np.ndarray, b: Optional[np.ndarray] = None
+    ):
         if test:
             ok_(True)
         else:
-            logger.info(f'Tested objects are\n{a}\n{str(b)}\n')
+            logger.info(f"Tested objects are\n{a}\n{str(b)}\n")
             self.fail(msg)
 
     def assertMatrixAlmostEqual(self, a: np.ndarray, b: np.ndarray):
-        self.__assert_sub(np.allclose(a, b), 'Matrices not identical', a, b)
+        self.__assert_sub(np.allclose(a, b), "Matrices not identical", a, b)
 
     def assertMatrixEqual(self, a: np.ndarray, b: np.ndarray):
-        self.__assert_sub((a == b).all(), 'Matrices not identical', a, b)
+        self.__assert_sub((a == b).all(), "Matrices not identical", a, b)
 
     def assertMatrixAllReal(self, a: np.ndarray):
-        self.__assert_sub(np.isreal(a).all(), 'Matrix not real', a)
+        self.__assert_sub(np.isreal(a).all(), "Matrix not real", a)
 
     def assertMatrixUnitary(self, a: np.ndarray):
-        self.__assert_sub(a.ndim == 2 and a.shape[0] == a.shape[1]
-                          and np.allclose(a @ np.conjugate(a.T), np.identity(a.shape[0])),
-                          'Matrix not unitary', a)
+        self.__assert_sub(
+            a.ndim == 2
+            and a.shape[0] == a.shape[1]
+            and np.allclose(a @ np.conjugate(a.T), np.identity(a.shape[0])),
+            "Matrix not unitary",
+            a,
+        )
 
     def assertSortedInAbsoluteValue(self, a: np.ndarray):
         target = a.flatten()
         for i in range(0, len(target) - 1):
-            self.__assert_sub(abs(target[i]) < abs(target[i + 1]), 'Object not sorted in its absolute value', a)
+            self.__assert_sub(
+                abs(target[i]) < abs(target[i + 1]),
+                "Object not sorted in its absolute value",
+                a,
+            )
 
     def assertSorted(self, a: np.ndarray):
         target = a.flatten()
         for i in range(0, len(target) - 1):
-            self.__assert_sub(target[i] < target[i + 1], 'Object not sorted', a)
+            self.__assert_sub(target[i] < target[i + 1], "Object not sorted", a)
 
     def assertAllNonNegative(self, a: np.ndarray):
         target = a.flatten()
         for i in range(0, len(target)):
-            self.__assert_sub(target[i] >= 0, 'Object not all-positive', a)
+            self.__assert_sub(target[i] >= 0, "Object not all-positive", a)
 
     def test_trigonometric_random(self):
         sin_regions = [i * math.pi / 4 for i in [-2, -1, 0, 1, 2]]
@@ -98,18 +110,34 @@ class TestUtility(unittest.TestCase):
         r = 1e-12
         i = 1e-12j
         # remove off-diagonal small elements
-        self.assertMatrixEqual(u.chop_matrix(np.array([[1, r, i], [i, 2, r], [r, i, -4j + i]])),
-                               np.array([[1, 0, 0], [0, 2, 0], [0, 0, -4j + i]]))
+        self.assertMatrixEqual(
+            u.chop_matrix(np.array([[1, r, i], [i, 2, r], [r, i, -4j + i]])),
+            np.array([[1, 0, 0], [0, 2, 0], [0, 0, -4j + i]]),
+        )
         # not remove if one of the relevant diagonal elements are small
-        self.assertMatrixEqual(u.chop_matrix(np.array([[1, r, i], [i, 2, r], [i, r, r]])),
-                               np.array([[1, 0, i], [0, 2, r], [i, r, r]]))
+        self.assertMatrixEqual(
+            u.chop_matrix(np.array([[1, r, i], [i, 2, r], [i, r, r]])),
+            np.array([[1, 0, i], [0, 2, r], [i, r, r]]),
+        )
         # remove small real or imaginary part
-        self.assertMatrixEqual(u.chop_matrix(
-            np.array([[3 + i, r + 3j, 3 + 3j, r + 2 * i], [3 + r + i, r + 3j + i, - r + i, i]])),
-            np.array([[3, 3j, 3 + 3j, r + 2 * i], [3 + r, 3j + i, - r + i, i]]))
+        self.assertMatrixEqual(
+            u.chop_matrix(
+                np.array(
+                    [
+                        [3 + i, r + 3j, 3 + 3j, r + 2 * i],
+                        [3 + r + i, r + 3j + i, -r + i, i],
+                    ]
+                )
+            ),
+            np.array([[3, 3j, 3 + 3j, r + 2 * i], [3 + r, 3j + i, -r + i, i]]),
+        )
         # combination
-        self.assertMatrixEqual(u.chop_matrix(np.array([[1 + i, r, i], [r + i, 2 + i, r], [-r, i, -4j + i + r]])),
-                               np.array([[1, 0, 0], [0, 2, 0], [0, 0, -4j + i]]))
+        self.assertMatrixEqual(
+            u.chop_matrix(
+                np.array([[1 + i, r, i], [r + i, 2 + i, r], [-r, i, -4j + i + r]])
+            ),
+            np.array([[1, 0, 0], [0, 2, 0], [0, 0, -4j + i]]),
+        )
 
     def test_autonne_takagi_real(self):
         m = np.random.rand(4, 4) - np.random.rand(4, 4)  # generate signed random matrix
@@ -123,16 +151,22 @@ class TestUtility(unittest.TestCase):
         self.assertMatrixAllReal(n)
         self.assertSortedInAbsoluteValue(d_vector)
         self.assertMatrixUnitary(n)
-        self.assertMatrixAlmostEqual(np.conjugate(n) @ m @ np.conjugate(n.T), np.diag(d_vector))
+        self.assertMatrixAlmostEqual(
+            np.conjugate(n) @ m @ np.conjugate(n.T), np.diag(d_vector)
+        )
 
         d_vector, n = u.autonne_takagi(m, try_real_mixing=False)
         self.assertAllNonNegative(d_vector)
         self.assertSortedInAbsoluteValue(d_vector)
         self.assertMatrixUnitary(n)
-        self.assertMatrixAlmostEqual(np.conjugate(n) @ m @ np.conjugate(n.T), np.diag(d_vector))
+        self.assertMatrixAlmostEqual(
+            np.conjugate(n) @ m @ np.conjugate(n.T), np.diag(d_vector)
+        )
 
     def test_autonne_takagi_complex(self):
-        m = (np.random.rand(4, 4) - np.random.rand(4, 4)) + (np.random.rand(4, 4) - np.random.rand(4, 4)) * 1j
+        m = (np.random.rand(4, 4) - np.random.rand(4, 4)) + (
+            np.random.rand(4, 4) - np.random.rand(4, 4)
+        ) * 1j
         m = m + m.T  # input must be symmetric
 
         # for complex input, Autonne-Takagi decomposition will give
@@ -142,16 +176,20 @@ class TestUtility(unittest.TestCase):
         d_vector, n = u.autonne_takagi(m, try_real_mixing=True)
         self.assertSortedInAbsoluteValue(d_vector)
         self.assertMatrixUnitary(n)
-        self.assertMatrixAlmostEqual(np.conjugate(n) @ m @ np.conjugate(n.T), np.diag(d_vector))
+        self.assertMatrixAlmostEqual(
+            np.conjugate(n) @ m @ np.conjugate(n.T), np.diag(d_vector)
+        )
 
         d_vector, n = u.autonne_takagi(m, try_real_mixing=False)
         self.assertAllNonNegative(d_vector)
         self.assertSortedInAbsoluteValue(d_vector)
         self.assertMatrixUnitary(n)
-        self.assertMatrixAlmostEqual(np.conjugate(n) @ m @ np.conjugate(n.T), np.diag(d_vector))
+        self.assertMatrixAlmostEqual(
+            np.conjugate(n) @ m @ np.conjugate(n.T), np.diag(d_vector)
+        )
 
     def test_singular_value_decomposition_real(self):
-        m = (np.random.rand(4, 4) - np.random.rand(4, 4))
+        m = np.random.rand(4, 4) - np.random.rand(4, 4)
         d_vector, uu, vv = u.singular_value_decomposition(m)
         self.assertAllNonNegative(d_vector)
         self.assertSorted(d_vector)
@@ -159,19 +197,25 @@ class TestUtility(unittest.TestCase):
         self.assertMatrixUnitary(vv)
         self.assertMatrixAllReal(uu)
         self.assertMatrixAllReal(vv)
-        self.assertMatrixAlmostEqual(np.conjugate(uu) @ m @ np.conjugate(vv.T), np.diag(d_vector))
+        self.assertMatrixAlmostEqual(
+            np.conjugate(uu) @ m @ np.conjugate(vv.T), np.diag(d_vector)
+        )
 
     def test_singular_value_decomposition_complex(self):
-        m = (np.random.rand(4, 4) - np.random.rand(4, 4)) + (np.random.rand(4, 4) - np.random.rand(4, 4)) * 1j
+        m = (np.random.rand(4, 4) - np.random.rand(4, 4)) + (
+            np.random.rand(4, 4) - np.random.rand(4, 4)
+        ) * 1j
         d_vector, uu, vv = u.singular_value_decomposition(m)
         self.assertAllNonNegative(d_vector)
         self.assertSorted(d_vector)
         self.assertMatrixUnitary(uu)
         self.assertMatrixUnitary(vv)
-        self.assertMatrixAlmostEqual(np.conjugate(uu) @ m @ np.conjugate(vv.T), np.diag(d_vector))
+        self.assertMatrixAlmostEqual(
+            np.conjugate(uu) @ m @ np.conjugate(vv.T), np.diag(d_vector)
+        )
 
     def test_mass_diagonalization_real(self):
-        m = (np.random.rand(4, 4) - np.random.rand(4, 4))
+        m = np.random.rand(4, 4) - np.random.rand(4, 4)
         m = m + m.T  # symmetric
         d_vector, r = u.mass_diagonalization(m)
         self.assertMatrixAllReal(d_vector)
@@ -181,7 +225,9 @@ class TestUtility(unittest.TestCase):
         self.assertMatrixAlmostEqual(r @ m @ np.conjugate(r.T), np.diag(d_vector))
 
     def test_mass_diagonalization_complex(self):
-        m = (np.random.rand(4, 4) - np.random.rand(4, 4)) + (np.random.rand(4, 4) - np.random.rand(4, 4)) * 1j
+        m = (np.random.rand(4, 4) - np.random.rand(4, 4)) + (
+            np.random.rand(4, 4) - np.random.rand(4, 4)
+        ) * 1j
         m = m + np.conjugate(m.T)  # hermitian
         d_vector, r = u.mass_diagonalization(m)
         self.assertMatrixAllReal(d_vector)

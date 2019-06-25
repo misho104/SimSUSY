@@ -1,26 +1,31 @@
-from simsusy.abs_model import AbsModel
-from typing import Optional, List, Tuple, Union  # noqa: F401
 import logging
+from typing import List, Optional, Tuple, Union  # noqa: F401
+
+from simsusy.abs_model import AbsModel
 
 
 class AbsCalculator:
-    def __init__(self, input: AbsModel, logger: Optional[logging.Logger]=None)->None:
-        self.input = input            # type: AbsModel
+    def __init__(
+        self, input: AbsModel, logger: Optional[logging.Logger] = None
+    ) -> None:
+        self.input = input  # type: AbsModel
         self.output = NotImplemented  # type: AbsModel
-        self.logger = logger if logger else logging.getLogger(__name__)  # type: logging.Logger
+        self.logger = (
+            logger if logger else logging.getLogger(__name__)
+        )  # type: logging.Logger
 
         # logger to output as SPINFO 3/4
-        self._errors = []        # type: List[str]
-        self._warnings = []      # type: List[str]
+        self._errors = []  # type: List[str]
+        self._warnings = []  # type: List[str]
 
-    def write_output(self, filename: Optional[str]=None, slha1: bool=False)->None:
+    def write_output(self, filename: Optional[str] = None, slha1: bool = False) -> None:
         raise NotImplementedError
 
     def calculate(self):
         raise NotImplementedError
 
     @staticmethod
-    def to_message(obj: Union[str, Tuple[Union[str, int, float]]])->str:
+    def to_message(obj: Union[str, Tuple[Union[str, int, float]]]) -> str:
         if isinstance(obj, str):
             return obj
         else:
