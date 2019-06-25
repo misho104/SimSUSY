@@ -24,7 +24,7 @@ class MSSMModel(AbsModel):
             for key in range(1, key_max + 1):
                 v = block.get(key, default=None) if block else None
                 if v is not None:
-                    self.set(block_name, key, v)
+                    self.slha[block_name, key] = v
 
         minpar_used = {
             1: False,
@@ -42,7 +42,7 @@ class MSSMModel(AbsModel):
                     if i == j:
                         extpar_used[sfermion.extpar + i] = v is None
                     if v is not None:
-                        self.set(sfermion.slha2_input, (i, j), v)
+                        self.slha[sfermion.slha2_input, i, j] = v
         for a_term in [A.U, A.D, A.E]:
             block = self.input.block(a_term.slha2_input)
             for i in [1, 2, 3]:
@@ -51,14 +51,14 @@ class MSSMModel(AbsModel):
                     if i == j == 3:
                         extpar_used[a_term.extpar] = v is None
                     if v is not None:
-                        self.set(a_term.slha2_input, (i, j), v)
+                        self.slha[a_term.slha2_input, i, j] = v
 
         # EXTPAR
         block = self.input.block("EXTPAR")
         for key in [1, 2, 3]:
             v = block[key] if block else None
             if v is not None:
-                self.set("EXTPAR", key, v)
+                self.slha["EXTPAR", key] = v
             else:
                 minpar_used[2] = True
         for sfermion in [S.QL, S.UR, S.DR, S.LL, S.ER]:
@@ -67,7 +67,7 @@ class MSSMModel(AbsModel):
                 if extpar_used[key]:
                     v = block.get(key, default=None) if block else None
                     if v is not None:
-                        self.set("EXTPAR", key, v)
+                        self.slha["EXTPAR", key] = v
                     else:
                         minpar_used[1] = True
         for a_term in [A.U, A.D, A.E]:
@@ -75,7 +75,7 @@ class MSSMModel(AbsModel):
             if extpar_used[key]:
                 v = block.get(key, default=None) if block else None
                 if v is not None:
-                    self.set("EXTPAR", key, v)
+                    self.slha["EXTPAR", key] = v
                 else:
                     minpar_used[5] = True
 
@@ -84,7 +84,7 @@ class MSSMModel(AbsModel):
             v = block.get(key, default=None) if block else None
             if v is not None:
                 ewsb_params.append(key)
-                self.set("EXTPAR", key, v)
+                self.slha["EXTPAR", key] = v
                 if key == 23:
                     minpar_used[4] = False
                 elif key == 25:
@@ -98,16 +98,16 @@ class MSSMModel(AbsModel):
             if minpar_used[key]:
                 v = block.get(key, default=None) if block else None
                 if v is not None:
-                    self.set("MINPAR", key, v)
+                    self.slha["MINPAR", key] = v
 
         # SMINPUTS and MODSEL
         block = self.input.block("SMINPUTS")
         if block:
             for k, v in block.items():
                 if 1 <= k <= 7 or k in [8, 11, 12, 13, 14, 21, 22, 23, 24]:
-                    self.set("SMINPUTS", k, v)
+                    self.slha["SMINPUTS", k] = v
         block = self.input.block("MODSEL")
         if block:
             for k, v in block.items():
                 if k == 1:
-                    self.set("MODSEL", k, v)
+                    self.slha["MODSEL", k] = v

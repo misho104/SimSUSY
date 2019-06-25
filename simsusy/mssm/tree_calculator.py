@@ -381,11 +381,11 @@ class Calculator(AbsCalculator):
             if self.cpv == CPV.NONE:
                 if not is_real_matrix(self.input.vckm()):
                     self.add_warning("CKM CP-phase is ignored due to MODSEL-5")
-                    self.input.set("VCKMIN", 4, 0)
+                    self.input.slha["VCKMIN", 4] = 0
                 if not is_real_matrix(self.input.upmns()):
                     self.add_warning("PMNS CP-phase is ignored due to MODSEL-5")
                     for i in (4, 5, 6):
-                        self.input.set("UPMNSIN", i, 0)
+                        self.input.slha["UPMNSIN", i] = 0
 
         if not self.flv.qfv():
             for matrix in [
@@ -430,10 +430,10 @@ class Calculator(AbsCalculator):
         self._calculate_sfermion()
 
     def _prepare_info(self):
-        self.output.set_info("SPINFO", 1, self.name)
-        self.output.set_info("SPINFO", 2, self.version)
-        self.output.set_info("SPINFO", 3, [])
-        self.output.set_info("SPINFO", 4, [])
+        self.output.slha["SPINFO", 1] = [self.name]
+        self.output.slha["SPINFO", 2] = [self.version]
+        self.output.slha["SPINFO", 3] = []
+        self.output.slha["SPINFO", 4] = []
 
     def _prepare_sm_ewsb(self):
         assert self.output.sm is not None
@@ -446,20 +446,20 @@ class Calculator(AbsCalculator):
         # isinstance(self.ewsb, EWSBParameters)
         for pid in [5, 6, 15, 23, 24]:
             self.output.set_mass(pid, self.output.sm.mass(pid))
-        self.output.set("ALPHA", None, self.output.ewsb.alpha())
-        self.output.set("HMIX", 1, self.output.ewsb.mu)
-        self.output.set("HMIX", 2, self.output.ewsb.tan_beta)
-        self.output.set("HMIX", 3, self.output.sm.vev())
-        self.output.set("HMIX", 4, self.output.ewsb.ma_sq)
-        self.output.set("GAUGE", 1, self.output.sm.gy())
-        self.output.set("GAUGE", 2, self.output.sm.gw())
-        self.output.set("GAUGE", 3, self.output.sm.gs())
+        self.output.slha["ALPHA", None] = self.output.ewsb.alpha()
+        self.output.slha["HMIX", 1] = self.output.ewsb.mu
+        self.output.slha["HMIX", 2] = self.output.ewsb.tan_beta
+        self.output.slha["HMIX", 3] = self.output.sm.vev()
+        self.output.slha["HMIX", 4] = self.output.ewsb.ma_sq
+        self.output.slha["GAUGE", 1] = self.output.sm.gy()
+        self.output.slha["GAUGE", 2] = self.output.sm.gw()
+        self.output.slha["GAUGE", 3] = self.output.sm.gs()
 
     def _calculate_softmasses(self):
         for i in [1, 2, 3]:
-            self.output.set("MSOFT", i, self.input.mg(i))
-        self.output.set("MSOFT", 21, self.output.ewsb.mh1_sq)
-        self.output.set("MSOFT", 22, self.output.ewsb.mh2_sq)
+            self.output.slha["MSOFT", i] = self.input.mg(i)
+        self.output.slha["MSOFT", 21] = self.output.ewsb.mh1_sq
+        self.output.slha["MSOFT", 22] = self.output.ewsb.mh2_sq
 
         # Store according to SLHA2 scheme; for SLHA1 output, convert them to SLHA1 format when output.
         self.output.set_matrix("VCKM", self.input.vckm())
@@ -627,10 +627,8 @@ class Calculator(AbsCalculator):
         # soft masses
         for species in S:
             for gen in (1, 2, 3):
-                self.output.set(
-                    "MSOFT",
-                    species.extpar + gen,
-                    self.output.get(species.slha2_output, (gen, gen)) ** 0.5,
+                self.output.slha["MSOFT", species.extpar + gen] = (
+                    self.output.get(species.slha2_output, (gen, gen)) ** 0.5
                 )
             self.output.remove_block(species.slha2_output)
 
@@ -639,7 +637,7 @@ class Calculator(AbsCalculator):
             a33 = self.output.get(species.out_t, (3, 3)) / self.output.get(
                 species.out_y, (3, 3)
             )
-            self.output.set(species.out_a, (3, 3), a33)
+            self.output.slha[species.out_a, 3, 3] = a33
             self.output.remove_block(species.out_t)
             for i in (1, 2):
                 self.output.remove_value(species.out_y, (i, i))
@@ -665,10 +663,10 @@ class Calculator(AbsCalculator):
             ("SELMIX", "STAUMIX"),
         ):
             r = self.output.get_matrix(slha2)
-            self.output.set(slha1, (1, 1), r[2][2])
-            self.output.set(slha1, (1, 2), r[2][5])
-            self.output.set(slha1, (2, 1), r[5][2])
-            self.output.set(slha1, (2, 2), r[5][5])
+            self.output.slha[slha1, 1, 1] = r[2][2]
+            self.output.slha[slha1, 1, 2] = r[2][5]
+            self.output.slha[slha1, 2, 1] = r[5][2]
+            self.output.slha[slha1, 2, 2] = r[5][5]
             self.output.remove_block(slha2)
 
         assert is_diagonal_matrix(self.output.get_matrix("SNUMIX"))

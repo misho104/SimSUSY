@@ -25,13 +25,12 @@ class TestAbsModelInitialization(unittest.TestCase):
 
     def test_init_with_path_string(self):
         for path in self.paths:
-            slha = AbsModel(str(path))
+            slha = AbsModel(path)
             self.assertAlmostEqual(slha.mass(6), 175)
 
     def test_init_with_slha_content(self):
         for path in self.paths:
-            slha_content = path.read_text()
-            slha = AbsModel(slha_content)
+            slha = AbsModel(path)
             self.assertAlmostEqual(slha.mass(6), 175)
 
     @raises(FileNotFoundError)
@@ -75,13 +74,13 @@ class TestAbsModelWithGenericInput(unittest.TestCase):
         ok_(block)
         self.assertAlmostEqual(block.q, 123456.789)
         self.assertAlmostEqual(block[None], 3.1415926535)
-        self.assertAlmostEqual(block.get(), 3.1415926535)
+        self.assertAlmostEqual(block.get(None, default=-1), 3.1415926535)
 
         block = self.slha.block("noargblockb")
         ok_(block)
         self.assertAlmostEqual(block.q, 123456.789)
         eq_(block[None], 0)
-        eq_(block.get(), 0)
+        eq_(block.get(None, default=-1), 0)
 
     def test_block_with_unusual_content(self):
         return NotImplemented  # TODO: do we really have to deal with this?
@@ -98,8 +97,8 @@ class TestAbsModelWithGenericInput(unittest.TestCase):
 
         eq_(self.slha.get("OneArgBlock", 123456), None)
         eq_(self.slha.get("NotExistingBlock", 1), None)
-        eq_(self.slha.get("OneArgBlock", 123456, 789), 789)
-        eq_(self.slha.get("NotExistingBlock", 1, 789), 789)
+        eq_(self.slha.get("OneArgBlock", 123456, default=789), 789)
+        eq_(self.slha.get("NotExistingBlock", 1, default=789), 789)
 
     def test_mass(self):
         eq_(self.slha.mass(6), 175)
@@ -110,25 +109,6 @@ class TestAbsModelWithGenericInput(unittest.TestCase):
         self.assertAlmostEqual(self.slha.width(1000021), 13.4988503)
         self.assertAlmostEqual(self.slha.width(1000005), 10.7363639)
         self.assertAlmostEqual(self.slha.width(9876543), None)
-
-    def test_br(self):
-        self.assertAlmostEqual(1, self.slha.br(6, 5, 24))
-        self.assertAlmostEqual(1, self.slha.br(6, 24, 5))
-        self.assertAlmostEqual(0, self.slha.br(6, 5, -24))
-        self.assertAlmostEqual(0, self.slha.br(6, -5, -24))
-
-        self.assertAlmostEqual(0.0217368689, self.slha.br(1000021, 1000001, -1))
-        self.assertAlmostEqual(0.0217368689, self.slha.br(1000021, 1, -1000001))
-
-        self.assertAlmostEqual(0.001, self.slha.br(1000005, 1, -2, -3))
-        self.assertAlmostEqual(0.002, self.slha.br(1000005, 1, -2, -3, 4))
-        self.assertAlmostEqual(0.003, self.slha.br(1000005, 1, -2, -3, 4, 5))
-        self.assertAlmostEqual(0.004, self.slha.br(1000005, 1, -2, -3, 4, 5, 6))
-        self.assertAlmostEqual(0.004, self.slha.br(1000005, 6, 5, 4, 1, -2, -3))
-        self.assertAlmostEqual(0, self.slha.br(1000005, 1, -2))
-
-        eq_(self.slha.br(1234567, 8, 9), None)  # NONE for not existing particle
-        eq_(self.slha.br(1000005, 8, 9), 0)  # ZERO for not existing decay channel
 
     def test_br_list(self):
         eq_(self.slha.br_list(123), None)
