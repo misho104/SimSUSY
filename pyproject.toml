@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "simsusy"
-version = "0.0.2"
+version = "0.1.0"
 description = "A Python package for simple SUSY spectrum calculation"
 authors = ["Sho Iwamoto (Misho) <webmaster@misho-web.com>"]
 license = "Apache 2.0"
@@ -8,28 +8,27 @@ readme = "README.rst"
 repository = "https://github.com/misho104/simsusy"
 
 [tool.poetry.dependencies]
-python = "^3.5"
-click = "^7.0"
-numpy = "^1.16"
-yaslha = "^0.2.1"
+python = "^3.8"
+click = "^8.1"
+numpy = "^1.22"
+yaslha = "^0.3.0"
 
 [tool.poetry.dev-dependencies]
-nose = "^1.3"
-coverage = "^4.5"
-coveralls = "^1.5"
-mypy =                  {version = "^0.710", python = "^3.6"}
-flake8 =                {version = "^3.7",   python = "^3.6"}
-flake8-builtins =       {version = "^1.4",   python = "^3.6"}
-flake8-commas =         {version = "^2.0",   python = "^3.6"}
-flake8-comprehensions = {version = "^1.4",   python = "^3.6"}
-flake8-docstrings =     {version = "^1.3",   python = "^3.6"}
-flake8-isort =          {version = "^2.6",   python = "^3.6"}
-flake8-logging-format = {version = "^0.6",   python = "3.6"}
-pep8-naming =           {version = "^0.7",   python = "3.6"}
+pytest = "^7.1"
+pytest-cov = "^3.0"
+mypy = "^0.961"
+flake8 = "^4.0"
+flake8-builtins = "^1.5"
+flake8-commas = "^2.1"
+flake8-comprehensions = "^3.10"
+flake8-docstrings = "^1.6"
+flake8-isort = "^4.1"
+flake8-logging-format = "^0.6.0"
+pep8-naming = "^0.13"
 
 [tool.poetry.scripts]
 simsusy = "simsusy.simsusy:simsusy_main"
 
 [build-system]
-requires = ["poetry>=0.12"]
+requires = ["poetry>=1.1.13"]
 build-backend = "poetry.masonry.api"
