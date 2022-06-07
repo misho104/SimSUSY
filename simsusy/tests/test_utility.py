@@ -5,7 +5,6 @@ import unittest
 from typing import Optional  # noqa
 
 import numpy as np
-from nose.tools import eq_, ok_  # noqa
 
 import simsusy.utility as u
 
@@ -17,7 +16,7 @@ class TestUtility(unittest.TestCase):
         self, test: bool, msg: str, a: np.ndarray, b: Optional[np.ndarray] = None
     ):
         if test:
-            ok_(True)
+            assert True
         else:
             logger.info(f"Tested objects are\n{a}\n{str(b)}\n")
             self.fail(msg)

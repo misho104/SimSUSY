@@ -2,11 +2,16 @@ import logging
 import pathlib
 import unittest
 
-from nose.tools import eq_, ok_, raises
+from typing import Optional
+import pytest
 
 from simsusy.abs_model import AbsModel
 
 logger = logging.getLogger("test_info")
+
+
+def assert_almost_equal(actual: Optional[float], expected: float) -> bool:
+    return actual is not None and actual == pytest.approx(expected)
 
 
 class TestAbsModelInitialization(unittest.TestCase):
@@ -21,21 +26,24 @@ class TestAbsModelInitialization(unittest.TestCase):
     def test_init_with_pathlib_path(self):
         for path in self.paths:
             slha = AbsModel(path)
-            self.assertAlmostEqual(slha.mass(6), 175)
+            assert slha.mass(6) is not None
+            assert_almost_equal(slha.mass(6), 175)
 
     def test_init_with_path_string(self):
         for path in self.paths:
             slha = AbsModel(path)
-            self.assertAlmostEqual(slha.mass(6), 175)
+            assert slha.mass(6) is not None
+            assert_almost_equal(slha.mass(6), 175)
 
     def test_init_with_slha_content(self):
         for path in self.paths:
             slha = AbsModel(path)
-            self.assertAlmostEqual(slha.mass(6), 175)
+            assert slha.mass(6) is not None
+            assert_almost_equal(slha.mass(6), 175)
 
-    @raises(FileNotFoundError)
     def test_init_with_non_existing_files(self):
-        AbsModel("a_not_existing_file")
+        with pytest.raises(FileNotFoundError):
+            AbsModel("a_not_existing_file")
 
 
 class TestAbsModelWithGenericInput(unittest.TestCase):
@@ -45,87 +53,87 @@ class TestAbsModelWithGenericInput(unittest.TestCase):
 
     def test_block_with_single_arg(self):
         block = self.slha.block("OneArgBlock")
-        ok_(block)
+        assert block
 
-        eq_(block[1], 10)
-        eq_(block[2], -20)
-        eq_(block[3], 0)
+        assert block[1] == 10
+        assert block[2] == -20
+        assert block[3] == 0
 
-        eq_(block.get(10, default=None), None)
-        eq_(block.get(12345, default=None), None)
+        assert block.get(10, default=None) is None
+        assert block.get(12345, default=None) is None
 
-        self.assertAlmostEqual(block[11], -1522.2)
-        self.assertAlmostEqual(block[12], 250)
+        assert_almost_equal(block[11], -1522.2)
+        assert_almost_equal(block[12], 250)
         # NOTE: pyslha does not support fortran-type notation 1.000d3 etc.
-        # self.assertAlmostEqual(block[13], 0.02)
-        # self.assertAlmostEqual(block[14], -0.003)
+        # assert_almost_equal(block[13], 0.02)
+        # assert_almost_equal(block[14], -0.003)
 
     def test_block_with_two_args(self):
         block = self.slha.block("DoubleArgBlock")
-        ok_(block)
+        assert block
 
-        eq_(block[1, 1], 1)
-        eq_(block[1, 2], 2)
-        eq_(block[2, 1], 2)
-        eq_(block[2, 2], 4)
+        assert block[1, 1] == 1
+        assert block[1, 2] == 2
+        assert block[2, 1] == 2
+        assert block[2, 2] == 4
 
     def test_block_without_arg(self):
         block = self.slha.block("noargblocka")
-        ok_(block)
-        self.assertAlmostEqual(block.q, 123456.789)
-        self.assertAlmostEqual(block[None], 3.1415926535)
-        self.assertAlmostEqual(block.get(None, default=-1), 3.1415926535)
+        assert block
+        assert_almost_equal(block.q, 123456.789)
+        assert_almost_equal(block[None], 3.1415926535)
+        assert_almost_equal(block.get(None, default=-1), 3.1415926535)
 
         block = self.slha.block("noargblockb")
-        ok_(block)
-        self.assertAlmostEqual(block.q, 123456.789)
-        eq_(block[None], 0)
-        eq_(block.get(None, default=-1), 0)
+        assert block
+        assert_almost_equal(block.q, 123456.789)
+        assert block[None] == 0
+        assert block.get(None, default=-1) == 0
 
     def test_block_with_unusual_content(self):
         return NotImplemented  # TODO: do we really have to deal with this?
         block = self.slha.block("unusualcase")
-        ok_(block)
-        eq_(block[1], "some calculator returns")
-        eq_(block[2], "these kind of error messages")
-        eq_(block[3], "which of course is not expected in slha format.")
+        assert block
+        assert block[1] == "some calculator returns"
+        assert block[2] == "these kind of error messages"
+        assert block[3] == "which of course is not expected in slha format."
 
     def test_get(self):
-        eq_(self.slha.get("OneArgBlock", 1), 10)
-        eq_(self.slha.get("DoubleArgBlock", (2, 2)), 4)
-        self.assertAlmostEqual(self.slha.get("noargblocka", None), 3.1415926535)
+        assert self.slha.get("OneArgBlock", 1) == 10
+        assert self.slha.get("DoubleArgBlock", (2, 2)) == 4
+        assert_almost_equal(self.slha.get("noargblocka", None), 3.1415926535)
 
-        eq_(self.slha.get("OneArgBlock", 123456), None)
-        eq_(self.slha.get("NotExistingBlock", 1), None)
-        eq_(self.slha.get("OneArgBlock", 123456, default=789), 789)
-        eq_(self.slha.get("NotExistingBlock", 1, default=789), 789)
+        assert self.slha.get("OneArgBlock", 123456) is None
+        assert self.slha.get("NotExistingBlock", 1) is None
+        assert self.slha.get("OneArgBlock", 123456, default=789) == 789
+        assert self.slha.get("NotExistingBlock", 1, default=789) == 789
 
     def test_mass(self):
-        eq_(self.slha.mass(6), 175)
-        eq_(self.slha.mass(12345), None)
+        assert self.slha.mass(6) == 175
+        assert self.slha.mass(12345) is None
 
     def test_width(self):
-        self.assertAlmostEqual(self.slha.width(6), 1.45899677)
-        self.assertAlmostEqual(self.slha.width(1000021), 13.4988503)
-        self.assertAlmostEqual(self.slha.width(1000005), 10.7363639)
-        self.assertAlmostEqual(self.slha.width(9876543), None)
+        assert_almost_equal(self.slha.width(6), 1.45899677)
+        assert_almost_equal(self.slha.width(1000021), 13.4988503)
+        assert_almost_equal(self.slha.width(1000005), 10.7363639)
+        assert self.slha.width(9876543) is None
 
     def test_br_list(self):
-        eq_(self.slha.br_list(123), None)
+        assert self.slha.br_list(123) is None
 
         brs = self.slha.br_list(6)
-        ok_(isinstance(brs, dict))
-        eq_(len(brs), 1)
-        self.assertAlmostEqual(brs[5, 24], 1)  # key is sorted by pid (negative first!)
+        assert isinstance(brs, dict)
+        assert len(brs) == 1
+        assert_almost_equal(brs[5, 24], 1)  # key is sorted by pid (negative first!)
 
         brs = self.slha.br_list(1000021)
-        eq_(len(brs), 2)
-        self.assertAlmostEqual(brs[-1, 1000001], 0.0217368689)
-        self.assertAlmostEqual(brs[-1000001, 1], 0.0217368689)
+        assert len(brs) == 2
+        assert_almost_equal(brs[-1, 1000001], 0.0217368689)
+        assert_almost_equal(brs[-1000001, 1], 0.0217368689)
 
         brs = self.slha.br_list(1000005)
-        eq_(len(brs), 8)
-        self.assertAlmostEqual(0.001, brs[-3, -2, 1])
-        self.assertAlmostEqual(0.002, brs[-3, -2, 1, 4])
-        self.assertAlmostEqual(0.003, brs[-3, -2, 1, 4, 5])
-        self.assertAlmostEqual(0.004, brs[-3, -2, 1, 4, 5, 6])
+        assert len(brs) == 8
+        assert_almost_equal(0.001, brs[-3, -2, 1])
+        assert_almost_equal(0.002, brs[-3, -2, 1, 4])
+        assert_almost_equal(0.003, brs[-3, -2, 1, 4, 5])
+        assert_almost_equal(0.004, brs[-3, -2, 1, 4, 5, 6])
