@@ -34,6 +34,7 @@ class S(enum.Enum):
     ER = (33, "MSE2IN")
 
     def __init__(self, extpar, slha2_input):
+        # type: (int, str) -> None
         self.extpar = extpar
         self.slha2_input = slha2_input
         self.slha2_output = slha2_input[0:4]
@@ -51,7 +52,8 @@ class A(enum.Enum):
     E = (13, "TEIN", "AE", "TE", "YE")
 
     def __init__(self, extpar, slha2_input, out_a, out_t, out_y):
-        self.extpar = extpar  # type: integer
+        # type: (int, str, str, str, str) -> None
+        self.extpar = extpar  # type: int
         self.slha2_input = slha2_input  # type: str
         self.out_a = out_a  # type: str
         self.out_t = out_t  # type: str

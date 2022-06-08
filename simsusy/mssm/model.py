@@ -1,4 +1,6 @@
-from typing import Dict, List, Optional  # noqa: F401
+from typing import Any, Dict, List, Optional  # noqa: F401
+
+import yaslha
 
 from simsusy.abs_model import AbsModel
 from simsusy.mssm.abstract import AbsEWSBParameters, AbsSMParameters  # noqa: F401
@@ -6,7 +8,7 @@ from simsusy.mssm.input import A, MSSMInput, S  # noqa: F401
 
 
 class MSSMModel(AbsModel):
-    def __init__(self, *args):
+    def __init__(self, *args: Any) -> None:
         super().__init__(*args)
         self.input = None  # type: Optional[MSSMInput]
         self.sm = None  # type: Optional[AbsSMParameters]
@@ -16,15 +18,16 @@ class MSSMModel(AbsModel):
         self._prepare_input_parameters()
         super().write(filename)
 
-    def _prepare_input_parameters(self):
+    def _prepare_input_parameters(self) -> None:
         assert self.input is not None
 
         for block_name, key_max in [("VCKMIN", 4), ("UPMNSIN", 6)]:
             block = self.input.block(block_name)
-            for key in range(1, key_max + 1):
-                v = block.get(key, default=None) if block else None
-                if v is not None:
-                    self.slha[block_name, key] = v
+            if block:
+                assert isinstance(block, yaslha.slha.Block)
+                for key in range(1, key_max + 1):
+                    if (v := block.get(key, default=None)) is not None:
+                        self.slha[block_name, key] = v
 
         minpar_used = {
             1: False,
@@ -36,6 +39,7 @@ class MSSMModel(AbsModel):
         extpar_used = dict()  # type: Dict[int, bool]
         for sfermion in [S.QL, S.UR, S.DR, S.LL, S.ER]:
             block = self.input.block(sfermion.slha2_input)
+            assert not isinstance(block, yaslha.slha.InfoBlock)
             for i in [1, 2, 3]:
                 for j in [1, 2, 3]:
                     v = block.get((i, j), default=None) if block else None
@@ -45,6 +49,7 @@ class MSSMModel(AbsModel):
                         self.slha[sfermion.slha2_input, i, j] = v
         for a_term in [A.U, A.D, A.E]:
             block = self.input.block(a_term.slha2_input)
+            assert not isinstance(block, yaslha.slha.InfoBlock)
             for i in [1, 2, 3]:
                 for j in [1, 2, 3]:
                     v = block.get((i, j), default=None) if block else None
@@ -55,6 +60,7 @@ class MSSMModel(AbsModel):
 
         # EXTPAR
         block = self.input.block("EXTPAR")
+        assert isinstance(block, yaslha.slha.Block)
         for key in [1, 2, 3]:
             v = block[key] if block else None
             if v is not None:
@@ -94,6 +100,7 @@ class MSSMModel(AbsModel):
 
         # MINPAR
         block = self.input.block("MINPAR")
+        assert isinstance(block, yaslha.slha.Block)
         for key in [1, 2, 3, 4, 5]:
             if minpar_used[key]:
                 v = block.get(key, default=None) if block else None
@@ -102,11 +109,15 @@ class MSSMModel(AbsModel):
 
         # SMINPUTS and MODSEL
         block = self.input.block("SMINPUTS")
+        assert isinstance(block, yaslha.slha.Block)
         if block:
             for k, v in block.items():
-                if 1 <= k <= 7 or k in [8, 11, 12, 13, 14, 21, 22, 23, 24]:
+                if isinstance(k, int) and (
+                    1 <= k <= 7 or k in [8, 11, 12, 13, 14, 21, 22, 23, 24]
+                ):
                     self.slha["SMINPUTS", k] = v
         block = self.input.block("MODSEL")
+        assert isinstance(block, yaslha.slha.Block)
         if block:
             for k, v in block.items():
                 if k == 1:

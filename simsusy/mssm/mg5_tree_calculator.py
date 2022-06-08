@@ -1,4 +1,5 @@
 import logging
+from re import M
 from typing import List, Optional  # noqa: F401
 
 import yaslha
@@ -37,18 +38,21 @@ class Calculator(simsusy.mssm.tree_calculator.Calculator):
 
         # prepare DECAY blocks with zero width, since mg5's `compute_width` fails if these are not provided.
         for pid in [6, 23, 24]:
-            self.output.decays[pid] = yaslha.Decay(pid)
+            self.output.slha.decays[pid] = yaslha.slha.Decay(pid)
         #            if self.output.mass(pid) is None:
         #                self.output.set_mass(pid, self.output.ewsb.mass(pid))
-        for pid in self.output.block("MASS").keys():
-            self.output.decays[pid] = yaslha.Decay(pid)
+        mass_block = self.output.block("MASS")
+        assert isinstance(mass_block, yaslha.slha.Block)
+        for pid2 in mass_block.keys():
+            assert isinstance(pid2, int)
+            self.output.slha.decays[pid2] = yaslha.slha.Decay(pid2)
 
         # remove unsupported blocks (IMVCKM, IMUPMNS, GAUGE)
         for name in ["IMVCKM", "IMUPMNS"]:
             unsupported_block = self.output.block(name)
             if unsupported_block:
                 for key, value in unsupported_block.items():
-                    if abs(value) > 1e-18:
+                    if isinstance(value, str) or abs(value) > 1e-18:
                         logger.warning(
                             f"MG5 does not support non-zero {name} block: {key} = {value} is ignored."
                         )
@@ -56,7 +60,7 @@ class Calculator(simsusy.mssm.tree_calculator.Calculator):
         self.output.remove_block("GAUGE")
 
         # use FRALPHA insstead of ALPHA
-        self.output.set("FRALPHA", 1, self.output.get("ALPHA", None))
+        self.output.slha["FRALPHA", 1] = self.output.get_float_assert("ALPHA", None)
         self.output.remove_block("ALPHA")
 
         # dumper configuration
@@ -82,7 +86,7 @@ class Calculator(simsusy.mssm.tree_calculator.Calculator):
         # done
         super().write_output(filename, slha1)
 
-    def _load_modsel(self):
+    def _load_modsel(self) -> None:
         super()._load_modsel()
         if self.cpv != CPV.NONE:
             self.add_error("This calculator does not support CPV.")

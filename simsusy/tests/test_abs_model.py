@@ -1,9 +1,12 @@
+"""Unit test for AbsModel class."""
+
 import logging
 import pathlib
 import unittest
-
 from typing import Optional
+
 import pytest
+import yaslha
 
 from simsusy.abs_model import AbsModel
 
@@ -11,10 +14,13 @@ logger = logging.getLogger("test_info")
 
 
 def assert_almost_equal(actual: Optional[float], expected: float) -> bool:
+    """Return if actual is almost equal to expected."""
     return actual is not None and actual == pytest.approx(expected)
 
 
 class TestAbsModelInitialization(unittest.TestCase):
+    """Test the initialization of the AbsModel class."""
+
     def setUp(self):
         self.working_dir = pathlib.Path(__file__).parent
         self.paths = [
@@ -43,17 +49,19 @@ class TestAbsModelInitialization(unittest.TestCase):
 
     def test_init_with_non_existing_files(self):
         with pytest.raises(FileNotFoundError):
-            AbsModel("a_not_existing_file")
+            AbsModel(pathlib.Path("a_not_existing_file"))
 
 
 class TestAbsModelWithGenericInput(unittest.TestCase):
+    """Test AbsModel with a standard input."""
+
     def setUp(self):
         self.working_dir = pathlib.Path(__file__).parent
         self.slha = AbsModel(self.working_dir / "sample.slha")
 
     def test_block_with_single_arg(self):
         block = self.slha.block("OneArgBlock")
-        assert block
+        assert isinstance(block, yaslha.slha.Block)
 
         assert block[1] == 10
         assert block[2] == -20
@@ -70,7 +78,7 @@ class TestAbsModelWithGenericInput(unittest.TestCase):
 
     def test_block_with_two_args(self):
         block = self.slha.block("DoubleArgBlock")
-        assert block
+        assert isinstance(block, yaslha.slha.Block)
 
         assert block[1, 1] == 1
         assert block[1, 2] == 2
@@ -79,13 +87,13 @@ class TestAbsModelWithGenericInput(unittest.TestCase):
 
     def test_block_without_arg(self):
         block = self.slha.block("noargblocka")
-        assert block
+        assert isinstance(block, yaslha.slha.Block)
         assert_almost_equal(block.q, 123456.789)
         assert_almost_equal(block[None], 3.1415926535)
         assert_almost_equal(block.get(None, default=-1), 3.1415926535)
 
         block = self.slha.block("noargblockb")
-        assert block
+        assert isinstance(block, yaslha.slha.Block)
         assert_almost_equal(block.q, 123456.789)
         assert block[None] == 0
         assert block.get(None, default=-1) == 0
@@ -93,20 +101,20 @@ class TestAbsModelWithGenericInput(unittest.TestCase):
     def test_block_with_unusual_content(self):
         return NotImplemented  # TODO: do we really have to deal with this?
         block = self.slha.block("unusualcase")
-        assert block
+        assert isinstance(block, yaslha.slha.Block)
         assert block[1] == "some calculator returns"
         assert block[2] == "these kind of error messages"
         assert block[3] == "which of course is not expected in slha format."
 
     def test_get(self):
-        assert self.slha.get("OneArgBlock", 1) == 10
-        assert self.slha.get("DoubleArgBlock", (2, 2)) == 4
-        assert_almost_equal(self.slha.get("noargblocka", None), 3.1415926535)
+        assert self.slha.get_int("OneArgBlock", 1) == 10
+        assert self.slha.get_int("DoubleArgBlock", (2, 2)) == 4
+        assert_almost_equal(self.slha.get_float("noargblocka", None), 3.1415926535)
 
-        assert self.slha.get("OneArgBlock", 123456) is None
-        assert self.slha.get("NotExistingBlock", 1) is None
-        assert self.slha.get("OneArgBlock", 123456, default=789) == 789
-        assert self.slha.get("NotExistingBlock", 1, default=789) == 789
+        assert self.slha.get_int("OneArgBlock", 123456) is None
+        assert self.slha.get_int("NotExistingBlock", 1) is None
+        assert self.slha.get_int_assert("OneArgBlock", 123456, default=789) == 789
+        assert self.slha.get_int_assert("NotExistingBlock", 1, default=789) == 789
 
     def test_mass(self):
         assert self.slha.mass(6) == 175
@@ -127,11 +135,13 @@ class TestAbsModelWithGenericInput(unittest.TestCase):
         assert_almost_equal(brs[5, 24], 1)  # key is sorted by pid (negative first!)
 
         brs = self.slha.br_list(1000021)
+        assert isinstance(brs, dict)
         assert len(brs) == 2
         assert_almost_equal(brs[-1, 1000001], 0.0217368689)
         assert_almost_equal(brs[-1000001, 1], 0.0217368689)
 
         brs = self.slha.br_list(1000005)
+        assert isinstance(brs, dict)
         assert len(brs) == 8
         assert_almost_equal(0.001, brs[-3, -2, 1])
         assert_almost_equal(0.002, brs[-3, -2, 1, 4])

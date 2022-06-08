@@ -1,5 +1,6 @@
 import json
 import logging
+import math
 import pathlib
 from typing import TYPE_CHECKING, List, Optional, Union  # noqa: F401
 
@@ -82,7 +83,7 @@ class AbsSMParameters:
     def vev(self) -> float:
         return NotImplemented
 
-    def mass(self, pid) -> float:  # pole mass
+    def mass(self, pid: int) -> float:  # pole mass
         if pid == 6:
             return self._mt
         elif pid == 11:
@@ -116,37 +117,41 @@ class AbsSMParameters:
 
 
 class AbsEWSBParameters:
+    sign_mu: Optional[complex]
+
     def __init__(self, model):  # type: (MSSMInput) -> None
-        self.mh1_sq = model.get_complex("EXTPAR", 21)  # type: Optional[CFloat]
-        self.mh2_sq = model.get_complex("EXTPAR", 22)  # type: Optional[CFloat]
-        self.mu = model.get_complex("EXTPAR", 23)  # type: Optional[CFloat]
-        self.ma_sq = model.get_complex("EXTPAR", 24)  # type: Optional[CFloat]
-        self.ma0 = model.get_complex("EXTPAR", 26)  # type: Optional[CFloat]
-        self.mhc = model.get_complex("EXTPAR", 27)  # type: Optional[CFloat]
+        self.mh1_sq = model.get_complex("EXTPAR", 21)
+        self.mh2_sq = model.get_complex("EXTPAR", 22)
+        self.mu = model.get_complex("EXTPAR", 23)
+        self.ma_sq = model.get_complex("EXTPAR", 24)
+        self.ma0 = model.get_complex("EXTPAR", 26)
+        self.mhc = model.get_complex("EXTPAR", 27)
 
-        self.tan_beta = model.get_complex("EXTPAR", 25) or model.get_complex(
-            "MINPAR", 3
-        )  # type: Optional[CFloat]
-        if self.tan_beta is None:
-            raise ValueError("tanbeta not specified.")
+        self.tan_beta = model.get_complex_assert(
+            "EXTPAR", 25, default=model.get_complex("MINPAR", 3)
+        )
 
-        sign_mu = model.get("MINPAR", 4)
-        sin_phi_mu = model.get("IMMINPAR", 4)
-        if sin_phi_mu:  # CPV
-            if sign_mu is None or not (0.99 < sign_mu ** 2 + sin_phi_mu ** 2 < 1.01):
-                raise ValueError("Invalid mu-phase (MINPAR 4 and IMMINPAR 4)")
-            sign_mu = complex(sign_mu, sin_phi_mu)
-            sign_mu /= abs(self.sign_mu)
+        if self.mu is None:  # specified by MINPAR block
+            sin_phi_mu = model.get_float("IMMINPAR", 4)
+            if sin_phi_mu:  # CP-violated
+                cos_phi_mu = model.get_float_assert("MINPAR", 4)
+                if not (0.99 < (abs_sq := cos_phi_mu**2 + sin_phi_mu**2) < 1.01):
+                    raise ValueError("Invalid mu-phase (MINPAR 4 and IMMINPAR 4)")
+                self.sign_mu = complex(cos_phi_mu, sin_phi_mu) / math.sqrt(abs_sq)
+            else:  # CP-conserved
+                sign_mu = model.get_float_assert("MINPAR", 4)
+                if not 0.9 < abs(sign_mu) < 1.1:
+                    raise ValueError("Invalid EXTPAR 4; either 1 or -1.")
+                self.sign_mu = -1 if sign_mu < 0 else 1
         else:
-            if not (sign_mu is None or 0.9 < abs(sign_mu) < 1.1):
-                raise ValueError(f"Invalid EXTPAR 4; either 1 or -1.")
-            sign_mu = (1 if sign_mu > 0 else -1) if sign_mu is not None else None
-        self.sign_mu = sign_mu  # type: Union[complex, int, None]
+            self.sign_mu = None
 
         unspecified_param_count = self._count_unspecified_params()
         if unspecified_param_count > 4:
-            self.mh1_sq = self.mh1_sq or model.get_complex("MINPAR", 1) ** 2
-            self.mh2_sq = self.mh2_sq or model.get_complex("MINPAR", 1) ** 2
+            m0 = model.get_float("EXTPAR", 1)
+            m0sq = None if m0 is None else pow(m0, 2)
+            self.mh1_sq = self.mh1_sq or m0sq
+            self.mh2_sq = self.mh2_sq or m0sq
         self.validate()
 
     def _count_unspecified_params(self) -> int:
@@ -159,7 +164,7 @@ class AbsEWSBParameters:
             self.mhc,
         ].count(None)
 
-    def validate(self):
+    def validate(self) -> bool:
         unspecified_param_count = self._count_unspecified_params()
         if unspecified_param_count == 0:
             return True

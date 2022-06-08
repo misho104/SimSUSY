@@ -1,3 +1,4 @@
+import logging
 import math
 from typing import (  # noqa: F401
     Any,
@@ -10,17 +11,23 @@ from typing import (  # noqa: F401
 )
 
 import numpy as np
+import numpy.typing
+import yaslha
 
 from simsusy.abs_model import AbsModel
 from simsusy.mssm.library import A, S
 from simsusy.utility import sin2cos
 
 T = TypeVar("T")
-CFloat = Union[float, complex]
+ComplexMatrix = numpy.typing.NDArray[np.complex_]
+RealMatrix = numpy.typing.NDArray[np.float_]
+Matrix = numpy.typing.NDArray[Union[np.float_, np.complex_]]
+
+logger = logging.getLogger(__name__)
 
 
 class MSSMInput(AbsModel):
-    def __init__(self, *args):
+    def __init__(self, *args: Any) -> None:
         super().__init__(*args)
         self.slha1_compatible = not (
             any(self.modsel(i) for i in (4, 5, 6))
@@ -33,97 +40,57 @@ class MSSMInput(AbsModel):
     one can extend functions below to return a parameter with scale.
     """
 
-    @staticmethod
-    def __value_or_unspecified_error(value: T, param_name) -> T:
-        if isinstance(value, np.ndarray):
-            if not np.any(np.equal(value, None)):
-                return value
-        else:
-            if value is not None:
-                return value
-        raise ValueError(f"{param_name} is not specified.")
+    def modsel(self, key: int) -> Optional[int]:
+        return self.get_int("MODSEL", key)
 
-    @staticmethod
-    def __complex_or_unspecified_error(
-        value: Union[complex, SupportsFloat, str, bytes], param_name
-    ) -> CFloat:
-        value = MSSMInput.__value_or_unspecified_error(value, param_name)
-        if isinstance(value, complex):
-            return value
-        try:
-            float_value = float(value)
-        except TypeError:
-            raise ValueError(f"{param_name} is not a number.")
-        return float_value
+    def sminputs(self, key: int) -> Optional[float]:
+        return self.get_float("SMINPUTS", key)
 
-    @staticmethod
-    def __complex_matrix_or_unspecified_error(
-        value: np.ndarray, param_name
-    ) -> np.ndarray:
-        value = MSSMInput.__value_or_unspecified_error(value, param_name)
-        for (i, j), v in np.ndenumerate(value):
-            if isinstance(v, complex):
-                pass
-            try:
-                value[i, j] = float(v)
-            except TypeError:
-                raise ValueError(f"{param_name}({i},{j}) is not a number.")
-        return value
-
-    def modsel(self, key: int) -> Union[int, float]:
-        return self.get("MODSEL", key)
-
-    def sminputs(self, key: int) -> float:
-        return self.get("SMINPUTS", key)
-
-    def mg(self, key: int) -> CFloat:
+    def mg(self, key: int) -> complex:
         """Return gaugino mass; key should be 1-3 (but no validation)."""
         value = self.get_complex("EXTPAR", key) or self.get_complex("MINPAR", 2)
-        return self.__complex_or_unspecified_error(value, f"M_{key}")
+        if value is not None:
+            return value
+        raise ValueError(f"Gaugino mass {key} is unset.")
 
-    def ms2(self, species: S) -> np.ndarray:
+    def ms2(self, species: S) -> Matrix:
         minpar_value = self.get_complex("MINPAR", 1)
-        extpar_values = [
-            self.get_complex("EXTPAR", species.extpar + gen) for gen in [1, 2, 3]
+        extpar_value = [
+            self.get_complex_assert("EXTPAR", species.extpar + gen, default=minpar_value)
+            for gen in [1, 2, 3]
         ]
-        value = np.diag(
-            [
-                extpar ** 2 if extpar is not None else minpar_value ** 2
-                for extpar in extpar_values
-            ]
-        )
-        for ix in (1, 2, 3):
-            for iy in (1, 2, 3):
-                v = self.get_complex(species.slha2_input, (ix, iy))
+        result = np.zeros((3, 3))
+        for ix in (0, 1, 2):
+            for iy in (0, 1, 2):
+                v = self.get_complex(species.slha2_input, (ix + 1, iy + 1))
                 if v is None:
-                    pass
+                    if ix == iy:  # diagonal element must be specified
+                        extpar = extpar_value[ix]
+                        if extpar is None:
+                            raise ValueError(
+                                f"{species.slha2_input}({ix+1}{iy+1}) is not specified."
+                            )
+                        else:
+                            result[ix, iy] = extpar * extpar
                 elif ix <= iy:
-                    value[ix, iy] = value[iy, ix] = v
+                    result[ix, iy] = result[iy, ix] = v
                 else:
-                    pass  # error/warning should be raised in each calculator
+                    logger.warning("%s is ignored.", (species.slha2_input, ix, iy))
+        return result
 
-        return self.__complex_matrix_or_unspecified_error(
-            value, f"m_sfermion({species.name}) mass"
-        )
-
-    def a(self, species: A) -> np.ndarray:
+    def a(self, species: A) -> Optional[Matrix]:
         """Return A-term matrix, but only if T-matrix is not specified in the
         input; otherwise return None, and one should read T-matrix."""
-        minpar_a33 = self.get_complex("MINPAR", 5)
-        extpar_a33 = self.get_complex("EXTPAR", species.extpar)
-
-        a33 = extpar_a33 if extpar_a33 is not None else minpar_a33
-
         for ix in (1, 2, 3):
             for iy in (1, 2, 3):
                 if self.get_complex(species.slha2_input, (ix, iy)) is not None:
                     return None  # because T-matrix is specified.
-
-        return self.__complex_matrix_or_unspecified_error(
-            np.diag([0, 0, a33]), f"A({species.name})"
+        a33 = self.get_complex_assert(
+            "EXTPAR", species.extpar, default=self.get_complex("MINPAR", 5)
         )
+        return np.diag([0, 0, a33])
 
-    def t(self, species: A) -> np.ndarray:
+    def t(self, species: A) -> Optional[Matrix]:
         """Return T-term matrix if T-matrix is specified; corresponding EXTPAR
         entry is ignored and thus (3,3) element must be always specified."""
         specified = False
@@ -138,17 +105,16 @@ class MSSMInput(AbsModel):
             return None  # and A-matrix should be specified instead.
         if math.isnan(matrix[2, 2]):
             ValueError(f"Block {species.slha2_input} needs (3,3) element.")
+        return matrix
 
-        return self.__complex_matrix_or_unspecified_error(matrix, f"T({species.name})")
-
-    def vckm(self) -> Optional[np.ndarray]:
-        lam = self.get("VCKMIN", 1, default=0)
-        a = self.get("VCKMIN", 2, default=0)
-        rhobar = self.get("VCKMIN", 3, default=0)
-        etabar = self.get("VCKMIN", 4)
+    def vckm(self) -> Matrix:
+        lam = self.get_float_assert("VCKMIN", 1, default=0)
+        a = self.get_float_assert("VCKMIN", 2, default=0)
+        rhobar = self.get_float_assert("VCKMIN", 3, default=0)
+        etabar = self.get_float("VCKMIN", 4)
 
         s12 = lam
-        s23 = a * lam ** 2
+        s23 = a * lam * lam
         c12 = sin2cos(s12)
         c23 = sin2cos(s23)
         r = rhobar + etabar * 1j if etabar else rhobar
@@ -170,27 +136,27 @@ class MSSMInput(AbsModel):
             ]
         )
 
-    def upmns(self) -> np.ndarray:
+    def upmns(self) -> ComplexMatrix:
         """return UPMNS matrix
         NOTE: SLHA2 convention uses theta-bars, while PDG2006 has only thetas.
               The difference should be ignored as it seems denoting MS-bar scheme.()
         """
-        s12, s23, s13 = (math.sin(self.get("UPMNSIN", i, default=0)) for i in [1, 2, 3])
-        c12, c23, c13 = (math.cos(self.get("UPMNSIN", i, default=0)) for i in [1, 2, 3])
-        delta = self.get("UPMNSIN", 4)
-        alpha1 = self.get("UPMNSIN", 5, default=0)
-        alpha2 = self.get("UPMNSIN", 6, default=0)
-        s13e = s13 * np.exp(1j * delta) if delta else s13
-
+        angles = [self.get_float_assert("UPMNSIN", i, default=0) for i in [1, 2, 3]]
+        s12, s23, s13 = (math.sin(v) for v in angles)
+        c12, c23, c13 = (math.cos(v) for v in angles)
+        delta = self.get_float("UPMNSIN", 4)
+        alpha1 = self.get_float_assert("UPMNSIN", 5, default=0)
+        alpha2 = self.get_float_assert("UPMNSIN", 6, default=0)
+        s13e: complex = s13 * np.exp(1j * delta) if delta else s13
         matrix = np.array(
             [
                 [c12 * c13, s12 * c13, s13e.conjugate()],
                 [-s12 * c23 - c12 * s23 * s13, c12 * c23 - s12 * s23 * s13, s23 * c13],
                 [s12 * s23 - c12 * c23 * s13, -c12 * s23 - s12 * c23 * s13, c23 * c13],
-            ]
+            ],
         )
         if alpha1 or alpha2:
             phase = np.diag([np.exp(0.5j * alpha1), np.exp(0.5j * alpha2), 1])
-            return matrix @ phase
+            return matrix @ phase  # type: ignore
         else:
             return matrix

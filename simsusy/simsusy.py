@@ -1,30 +1,31 @@
 #!/usr/bin/env python
 
 import importlib
-import inspect
+import logging
 import pathlib
 import types
-from logging import DEBUG, basicConfig, getLogger
-from typing import Dict, KeysView, Optional, ValuesView  # noqa: F401
+from typing import Any, Dict, KeysView, Optional, ValuesView  # noqa: F401
 
 import click
+import coloredlogs
 
-import simsusy
+import simsusy.abs_calculator
+import simsusy.abs_model
 
 __pkgname__ = "SimSUSY"
 __version__ = "0.0.1"
 __author__ = "Sho Iwamoto / Misho"
 __license__ = "MIT"
 
-basicConfig(level=DEBUG)
-logger = getLogger(__name__)
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 cwd = pathlib.Path(__file__).parent.resolve()
 
 
 class Calculators:
     """A singleton class to store calculators."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         cwd = pathlib.Path(__file__).parent.resolve()
         self.calculators = dict()  # type: Dict[str, pathlib.Path]
         for calculator_file in cwd.glob("*/*_calculator.py"):
@@ -32,8 +33,18 @@ class Calculators:
             module_name = ".".join(relative_path.with_suffix("").parts)
             self.calculators[module_name] = pathlib.Path("simsusy") / relative_path
 
-    def __getitem__(self, *args, **kwargs):
-        return self.calculators.__getitem__(*args, **kwargs)
+    @classmethod
+    def is_valid(cls, mod: Any) -> bool:
+        if not isinstance(mod, types.ModuleType):
+            return False
+        return (
+            issubclass(getattr(mod, "Calculator"), simsusy.abs_calculator.AbsCalculator)
+            and issubclass(getattr(mod, "Input"), simsusy.abs_model.AbsModel)
+            and issubclass(getattr(mod, "Output"), simsusy.abs_model.AbsModel)
+        )
+
+    def __getitem__(self, key: str) -> pathlib.Path:
+        return self.calculators.__getitem__(key)
 
     def get(self, name: str) -> Optional[pathlib.Path]:
         return self.calculators.get(name)
@@ -72,8 +83,12 @@ class Calculators:
 @click.option("--debug", is_flag=True, help="Display debug information for exceptions.")
 @click.version_option(__version__, "-V", "--version", prog_name=__pkgname__)
 @click.pass_context
-# @click.option('-v', '--verbose', is_flag=True, default=False, help="Show verbose output")
+# @click.option(
+#     "-v", "--verbose", is_flag=True, default=False, help="Show verbose output"
+# )
 def simsusy_main(context, **kwargs):
+    # type: (click.Context, **Dict[str, Any]) -> None
+    coloredlogs.install(logger=logging.getLogger(), fmt="%(levelname)8s %(message)s")
     if context.obj is None:
         context.obj = dict()
     context.obj["DEBUG"] = kwargs["debug"] if "debug" in kwargs else False
@@ -86,6 +101,7 @@ def simsusy_main(context, **kwargs):
 @click.option("--v1", is_flag=True, help="Try to output in SLHA1 format")
 @click.pass_context
 def run(context, calculator, input, output, v1):
+    # type: (click.Context, str, click.Path, Optional[click.Path], bool) -> None
     calculators = Calculators()
     guessed_calculator = calculators.guess(calculator)
     if guessed_calculator is None:
@@ -104,24 +120,17 @@ def run(context, calculator, input, output, v1):
         if context.obj["DEBUG"]:
             raise e
         else:
-            logger.error(f"Following exception is caught: " + str(e))
-            logger.error(f"Run with --debug option to see stack trace.")
+            logger.error("Following exception is caught: " + str(e))
+            logger.error("Run with --debug option to see stack trace.")
         exit(1)
-    if not (
-        isinstance(mod, types.ModuleType)
-        and all(inspect.isclass(c) for c in [mod.Calculator, mod.Input, mod.Output])
-        and issubclass(mod.Calculator, simsusy.abs_calculator.AbsCalculator)
-        and issubclass(mod.Input, simsusy.abs_model.AbsModel)
-        and issubclass(mod.Output, simsusy.abs_model.AbsModel)
-    ):
+    if not calculators.is_valid(mod):
         logger.error(f"Calculator {calculator} imported but invalid.")
         if context.obj["DEBUG"]:
-            logger.error("Debug information:")
-            logger.error(f"\tCalculator\t{mod.Calculator}")
-            logger.error(f"\tInput\t\t{mod.Input}")
-            logger.error(f"\tOutput\t\t{mod.Output}")
+            logger.error(f"Debug information: {mod.__dict__}")
+            for i in ["Calculator", "Input", "Output"]:
+                logger.error(f"\t{i}\t{getattr(mod, i, '(Not found)')}")
         else:
-            logger.error(f"Run with --debug option to see information.")
+            logger.error("Run with --debug option to see information.")
         exit(1)
     input_obj = mod.Input(input)
     calc_obj = mod.Calculator(input_obj)

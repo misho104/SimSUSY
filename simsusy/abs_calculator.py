@@ -21,7 +21,7 @@ class AbsCalculator:
     def write_output(self, filename: Optional[str] = None, slha1: bool = False) -> None:
         raise NotImplementedError
 
-    def calculate(self):
+    def calculate(self) -> None:
         raise NotImplementedError
 
     @staticmethod
@@ -31,12 +31,12 @@ class AbsCalculator:
         else:
             return obj.__repr__()
 
-    def add_error(self, obj: Union[str, Tuple[Union[str, int, float]]]):
+    def add_error(self, obj: Union[str, Tuple[Union[str, int, float]]]) -> None:
         message = self.to_message(obj)
         self._errors.append(message)
         self.logger.error(message)
 
-    def add_warning(self, obj: Union[str, Tuple[Union[str, int, float]]]):
+    def add_warning(self, obj: Union[str, Tuple[Union[str, int, float]]]) -> None:
         message = self.to_message(obj)
         self._warnings.append(message)
         self.logger.warning(message)

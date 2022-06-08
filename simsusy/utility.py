@@ -1,56 +1,80 @@
 import cmath
-from typing import Tuple
+import math
+from typing import Any, Tuple, TypeVar, Union
 
 import numpy as np
 import numpy.linalg as LA
+import numpy.typing
+
+ComplexMatrix = numpy.typing.NDArray[np.complex_]
+RealMatrix = numpy.typing.NDArray[np.float_]
+Matrix = numpy.typing.NDArray[Union[np.float_, np.complex_]]
+T = TypeVar("T", np.float_, np.complex_)
+
+
+def is_tiny(x: float, delta: float = 1e-6) -> bool:
+    return -delta < x < delta
 
 
 def sin2cos(sin: float) -> float:
-    """returns Cos[ArcSin[x]] assuming -pi/2 < x < pi/2."""
-    return ((sin + 1) * (-sin + 1)) ** 0.5
+    """returns Cos[ArcSin[x]] assuming -pi/2 < angle < pi/2."""
+    # result in [0, 1]
+    if (x := abs(sin)) > 1 and is_tiny(1 - x):
+        return 0
+    return math.sqrt((sin + 1) * (-sin + 1))
 
 
-def cos2sin(sin: float) -> float:
-    """returns Sin[ArcCos[x]] assuming 0 < x < pi."""
-    return ((sin + 1) * (-sin + 1)) ** 0.5
+def cos2sin(cos: float) -> float:
+    """returns Sin[ArcCos[x]] assuming 0 < angle < pi."""
+    # result in [0, 1]
+    return sin2cos(cos)  # reuse cos <-> sin
 
 
 def tan2sin(tan: float) -> float:
-    """returns Sin[ArcTan[x]] assuming -pi/2 < x < pi/2."""
-    return tan * (tan ** 2 + 1) ** (-0.5)
+    """returns Sin[ArcTan[x]] assuming -pi/2 < angle < pi/2."""
+    # result in [-1, 1]
+    return tan / math.sqrt(tan * tan + 1)
 
 
 def tan2cos(tan: float) -> float:
-    """returns Cos[ArcTan[x]] assuming -pi/2 < x < pi/2."""
-    return (tan ** 2 + 1) ** (-0.5)
+    """returns Cos[ArcTan[x]] assuming -pi/2 < angle < pi/2."""
+    # result in [0, 1]
+    return 1.0 / math.sqrt(tan * tan + 1)
 
 
 def sin2tan(sin: float) -> float:
-    """returns Tan[ArcSin[x]] assuming -pi/2 < x < pi/2."""
-    return sin * ((-sin + 1) * (sin + 1)) ** (-0.5)
+    """returns Tan[ArcSin[x]] assuming -pi/2 < angle < pi/2."""
+    # result in [-inf, inf]
+
+    return sin / math.sqrt((sin + 1) * (-sin + 1))
 
 
 def cos2tan(cos: float) -> float:
-    """returns Tan[ArcCos[x]] assuming 0 < x < pi."""
-    return ((1 - cos) * (1 + cos)) ** 0.5 / cos
+    """returns Tan[ArcCos[x]] assuming 0 < angle < pi."""
+    # result in [0, inf]
+    return math.sqrt((1 - cos) * (1 + cos)) / cos
 
 
 def tan2costwo(tan: float) -> float:
-    """returns Cos[2*ArcTan[x]] assuming -pi/2 < x < pi/2."""
-    return (1 + tan) * (1 - tan) / (tan ** 2 + 1)
+    """returns Cos[2*ArcTan[x]] assuming -pi/2 < angle < pi/2."""
+    # result in [-1, 1]
+    return (1 + tan) * (1 - tan) / (tan * tan + 1)
 
 
 def tan2sintwo(tan: float) -> float:
-    """returns Sin[2*ArcTan[x]] assuming -pi/2 < x < pi/2."""
-    return 2 * tan / (tan ** 2 + 1)
+    """returns Sin[2*ArcTan[x]] assuming -pi/2 < angle < pi/2."""
+    # result in [-1, 1]
+    return 2 * tan / (tan * tan + 1)
 
 
 def tan2tantwo(tan: float) -> float:
-    """returns Tan[2*ArcTan[x]] assuming -pi/2 < x < pi/2."""
+    """returns Tan[2*ArcTan[x]] assuming -pi/2 < angle < pi/2."""
+    # result in [-inf, inf]
     return 2 * tan / (1 + tan) / (1 - tan)
 
 
-def chop_matrix(m: np.ndarray, threshold=1e-7):
+def chop_matrix(m, threshold=1e-7):
+    # type: (numpy.typing.NDArray[T], float)->numpy.typing.NDArray[T]
     nx, ny = m.shape
     for ix in range(0, nx):
         for iy in range(0, ny):
@@ -73,31 +97,34 @@ def chop_matrix(m: np.ndarray, threshold=1e-7):
     return m
 
 
-def is_real_matrix(m: np.ndarray):
-    for (i, j), v in np.ndenumerate(m):
-        if isinstance(v, complex):
-            return False
-    return True
+def is_real_matrix(m: Any) -> bool:
+    """Return if m is 2-dimensional NDArray with real entries."""
+    if not (isinstance(m, np.ndarray) and m.ndim == 2):
+        return False
+    return bool(np.isreal(m).all())
 
 
-def is_diagonal_matrix(m: np.ndarray):
+def is_diagonal_matrix(m: Any) -> bool:
+    """Return if m is 2-dimensional NDArray with all off-diagonal entries being zero."""
+    if not (isinstance(m, np.ndarray) and m.ndim == 2):
+        return False
     for (i, j), v in np.ndenumerate(m):
         if i != j and v:
             return False
     return True
 
 
-def autonne_takagi(
-    m: np.ndarray, try_real_mixing=True
-) -> Tuple[np.ndarray, np.ndarray]:
+def autonne_takagi(m, try_real_mixing=True):
+    # type: (Matrix, bool) -> Tuple[RealMatrix, Matrix]
     """Perform Autonne-Takagi decomposition.
 
     :param m: an input matrix M.
-    :param try_real_mixing: if true, try to set N as real by allowing negative D entries;
-                            if false, D is positive and N may be complex.
+    :param try_real_mixing: if true, try to set N as a real matrix by allowing negative
+                            D entries; if false, D is positive and N may be complex.
     :returns: a tuple (d, N), where d is a 1d matrix containing the diagonal elements of
-              a diagonal matrix D, and N is an unitary matrix, which satisfy N^* M N^† = D. (SLHA eq.12)
-              N is real if possible and try_real_mixing=True, and d is sorted as ascending in its absolute value.
+              a diagonal matrix D, and N is an unitary matrix, where N^* M N^† = D
+              (SLHA eq.12). N is real if possible and try_real_mixing=True, and d is
+              sorted as ascending in its absolute value.
     """
     eigenvalues, eigenvectors = LA.eigh(np.conjugate(m) @ m)
     n = np.conjugate(eigenvectors.T)
@@ -110,15 +137,13 @@ def autonne_takagi(
     return chop_matrix((np.conjugate(n) @ m @ np.conjugate(n.T))).diagonal(), n
 
 
-def singular_value_decomposition(
-    m: np.ndarray
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+def singular_value_decomposition(m: Matrix) -> Tuple[RealMatrix, Matrix, Matrix]:
     """Perform singular value decomposition.
 
     :param m: an input matrix M.
-    :returns: a tuple (d, U, V), where d is a 1d matrix containing the diagonal elements of
-              a non-negative diagonal matrix D, and U and V are unitary matrices, which satisfy
-              U^* M V^† = D. (SLHA eq.14 or SLHA2 eq.48)
+    :returns: a tuple (d, U, V), where d is a 1d matrix containing the diagonal elements
+              of a non-negative diagonal matrix D, and U and V are unitary matrices,
+              which satisfy U^* M V^† = D. (SLHA eq.14 or SLHA2 eq.48)
               U and V are real for a real input M, and d is ascending.
     """
     u0, s, vh0 = LA.svd(m)  # u0 @ s @ vh0 = m, i.e. u0^† @ m @ v0h^† = s
@@ -126,7 +151,7 @@ def singular_value_decomposition(
     return d, chop_matrix(u), chop_matrix(v)
 
 
-def mass_diagonalization(m: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+def mass_diagonalization(m: Matrix) -> Tuple[RealMatrix, Matrix]:
     """Perform mass diagonalization.
 
     :param m: an input matrix M, which is Hermitian.
