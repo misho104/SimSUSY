@@ -1,4 +1,4 @@
-|img_ci| |img_cov| |img_license|
+|img_ci|_ |img_cov|_ |img_type|_ |img_license|_ |img_black|_
 
 SimSUSY: simple SUSY spectrum calculators
 =========================================
@@ -36,12 +36,23 @@ See ``LICENSE`` file and ``NOTICE`` file for further information.
 .. |Apache2| replace:: the Apache License, version 2.0
 .. _Apache2: https://www.apache.org/licenses/LICENSE-2.0
 
-.. |img_ci| image:: https://api.travis-ci.org/misho104/SimSUSY.svg?branch=master
+.. _img_ci: https://github.com/misho104/SimSUSY/actions/workflows/unit-test.yaml
+.. |img_ci| image:: https://github.com/misho104/SimSUSY/actions/workflows/unit-test.yaml/badge.svg?branch=master
   :height: 16px
 
-.. |img_cov| image:: https://coveralls.io/repos/github/misho104/SimSUSY/badge.svg?branch=master
+.. _img_cov: https://codecov.io/gh/misho104/SimSUSY
+.. |img_cov| image:: https://codecov.io/gh/misho104/SimSUSY/branch/master/graph/badge.svg
   :height: 16px
 
+.. _img_type: https://github.com/misho104/SimSUSY/actions/workflows/type-check.yaml
+.. |img_type| image:: https://github.com/misho104/SimSUSY/actions/workflows/type-check.yaml/badge.svg?branch=master
+  :height: 16px
+
+.. _img_license: https://github.com/misho104/SimSUSY/blob/master/LICENSE
 .. |img_license| image:: https://shields.io/badge/license-Apache--2.0-ff25d1
   :height: 16px
   :alt: This package is licensed under the Apache-2.0 License.
+
+.. _img_black: https://github.com/ambv/black
+.. |img_black| image:: https://img.shields.io/badge/code%20style-black-000000.svg
+  :height: 16px
