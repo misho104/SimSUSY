@@ -20,7 +20,8 @@ class Calculator(simsusy.mssm.tree_calculator.Calculator):
     def __init__(self, input: Input) -> None:
         super().__init__(input=input)
 
-    def write_output(self, filename: Optional[str] = None, slha1: bool = False) -> None:
+    def write_output(self, filename=None, slha1=False):
+        # type: (Optional[str], bool)->None
         # MSSM_SLHA2 does not accept SLHA2 format of sfermion mixing.
         pid_base = (1000001, 1000003, 1000005, 2000001, 2000003, 2000005)
         self._reorder_no_flv_mixing_matrix(
@@ -36,7 +37,8 @@ class Calculator(simsusy.mssm.tree_calculator.Calculator):
             "SNUMIX", [1000012, 1000014, 1000016], lighter_lr_mixing=False
         )
 
-        # prepare DECAY blocks with zero width, since mg5's `compute_width` fails if these are not provided.
+        # prepare DECAY blocks with zero width, since mg5's `compute_width` fails if
+        # these are not provided.
         for pid in [6, 23, 24]:
             self.output.slha.decays[pid] = yaslha.slha.Decay(pid)
         #            if self.output.mass(pid) is None:
@@ -54,7 +56,10 @@ class Calculator(simsusy.mssm.tree_calculator.Calculator):
                 for key, value in unsupported_block.items():
                     if isinstance(value, str) or abs(value) > 1e-18:
                         logger.warning(
-                            f"MG5 does not support non-zero {name} block: {key} = {value} is ignored."
+                            "MG5 does not allow non-zero %s block: %s = %s is ignored.",
+                            name,
+                            key,
+                            value,
                         )
             self.output.remove_block(name)
         self.output.remove_block("GAUGE")
@@ -92,6 +97,6 @@ class Calculator(simsusy.mssm.tree_calculator.Calculator):
             self.add_error("This calculator does not support CPV.")
         if self.flv != FLV.NONE:
             self.logger.warning(
-                "Advisory warning: MSSM_SLHA2 model in MG5_aMC does not support flavor violation; "
-                "you must create FeynRules model."
+                "Advisory warning: MSSM_SLHA2 model in MG5_aMC does not support "
+                "flavor violation; you must create FeynRules model."
             )

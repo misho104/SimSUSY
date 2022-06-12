@@ -1,6 +1,6 @@
 import logging
 import math
-from typing import (  # noqa: F401
+from typing import (
     Any,
     List,
     Optional,
@@ -12,7 +12,6 @@ from typing import (  # noqa: F401
 
 import numpy as np
 import numpy.typing
-import yaslha
 
 from simsusy.abs_model import AbsModel
 from simsusy.mssm.library import A, S
@@ -54,9 +53,9 @@ class MSSMInput(AbsModel):
         raise ValueError(f"Gaugino mass {key} is unset.")
 
     def ms2(self, species: S) -> Matrix:
-        minpar_value = self.get_complex("MINPAR", 1)
-        extpar_value = [
-            self.get_complex_assert("EXTPAR", species.extpar + gen, default=minpar_value)
+        minpar = self.get_complex("MINPAR", 1)
+        extpar = [
+            self.get_complex_assert("EXTPAR", species.extpar + gen, default=minpar)
             for gen in [1, 2, 3]
         ]
         result = np.zeros((3, 3))
@@ -65,13 +64,12 @@ class MSSMInput(AbsModel):
                 v = self.get_complex(species.slha2_input, (ix + 1, iy + 1))
                 if v is None:
                     if ix == iy:  # diagonal element must be specified
-                        extpar = extpar_value[ix]
-                        if extpar is None:
+                        if extpar[ix] is None:
                             raise ValueError(
                                 f"{species.slha2_input}({ix+1}{iy+1}) is not specified."
                             )
                         else:
-                            result[ix, iy] = extpar * extpar
+                            result[ix, iy] = extpar[ix] * extpar[ix]
                 elif ix <= iy:
                     result[ix, iy] = result[iy, ix] = v
                 else:

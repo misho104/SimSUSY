@@ -100,25 +100,23 @@ class MSSMModel(AbsModel):
 
         # MINPAR
         block = self.input.block("MINPAR")
-        assert isinstance(block, yaslha.slha.Block)
-        for key in [1, 2, 3, 4, 5]:
-            if minpar_used[key]:
-                v = block.get(key, default=None) if block else None
-                if v is not None:
-                    self.slha["MINPAR", key] = v
+        if isinstance(block, yaslha.slha.Block):
+            for key in [1, 2, 3, 4, 5]:
+                if minpar_used[key]:
+                    v = block.get(key, default=None) if block else None
+                    if v is not None:
+                        self.slha["MINPAR", key] = v
 
         # SMINPUTS and MODSEL
         block = self.input.block("SMINPUTS")
-        assert isinstance(block, yaslha.slha.Block)
-        if block:
+        if isinstance(block, yaslha.slha.Block):
             for k, v in block.items():
                 if isinstance(k, int) and (
                     1 <= k <= 7 or k in [8, 11, 12, 13, 14, 21, 22, 23, 24]
                 ):
                     self.slha["SMINPUTS", k] = v
         block = self.input.block("MODSEL")
-        assert isinstance(block, yaslha.slha.Block)
-        if block:
+        if isinstance(block, yaslha.slha.Block):
             for k, v in block.items():
                 if k == 1:
                     self.slha["MODSEL", k] = v

@@ -5,6 +5,7 @@ from typing import List, Optional, TypeVar, Union  # noqa: F401
 import numpy as np
 import numpy.typing
 import yaslha
+
 import simsusy.simsusy
 from simsusy.abs_calculator import AbsCalculator
 from simsusy.mssm.abstract import AbsEWSBParameters, AbsSMParameters
@@ -192,8 +193,7 @@ class EWSBParameters(AbsEWSBParameters):
         return 0.5 * atan((pow2(ma) + pow2(mz)) / (ma + mz) / (ma - mz) * tan_twobeta)
 
     def yu(self) -> List[float]:
-        """Returns the diagonal elements of the Yukawa matrix (after super-CKM
-        rotation)"""
+        """Return the diagonal of the Yukawa matrix (after super-CKM rotation)."""
         assert isinstance(self.tan_beta, float)
         return [
             sqrt(2) * mass / self.sm.vev() / tan2sin(self.tan_beta)
@@ -314,12 +314,12 @@ class Calculator(AbsCalculator):
 
     def _load_sminputs(self) -> None:
         sminputs = self.input.block("SMINPUTS")
-        assert isinstance(sminputs, yaslha.slha.Block)
-        for k, v in sminputs.items():
-            if not isinstance(k, int) or not (
-                1 <= k <= 8 or k in [11, 12, 13, 14, 21, 22, 23, 24]
-            ):
-                self.add_warning(f"Block SMINPUTS: {k} = {v} is invalid.")
+        if isinstance(sminputs, yaslha.slha.Block):
+            for k, v in sminputs.items():
+                if not isinstance(k, int) or not (
+                    1 <= k <= 8 or k in [11, 12, 13, 14, 21, 22, 23, 24]
+                ):
+                    self.add_warning(f"Block SMINPUTS: {k} = {v} is invalid.")
         self.output.sm = SMParameters(self.input)
 
     def _load_ewsb_parameters(self) -> None:
@@ -360,7 +360,7 @@ class Calculator(AbsCalculator):
                         1 <= k[0] <= 3 and k[0] <= k[1] <= 3
                     ):  # upper triangle only
                         self.add_warning(
-                            f"Block {name}: {k} = {v} is ignored; upper triangle is used."
+                            f"Block {name}: {k} = {v} is ignored; used upper triangle."
                         )
             elif name in ["TUIN", "TDIN", "TEIN"]:
                 for k, v in content.items():
@@ -368,7 +368,7 @@ class Calculator(AbsCalculator):
                         self.add_error(f"Block {name}: {k} = {v} is invalid.")
                     elif not (1 <= k[0] <= 3 and 1 <= k[1] <= 3):
                         self.add_warning(
-                            f"Block {name}: {k} = {v} is ignored; upper triangle is used."
+                            f"Block {name}: {k} = {v} is ignored; used upper triangle."
                         )
             else:
                 self.add_warning(f"Unknown block {name} is ignored.")
@@ -391,7 +391,7 @@ class Calculator(AbsCalculator):
                     )
             for i in [1, 2, 3]:
                 if isinstance(self.input.mg(i), complex):
-                    self.add_error(f"CPV is conserved while gaugino mass is not real")
+                    self.add_error("CPV is conserved while gaugino mass is not real")
 
             if self.cpv == CPV.NONE:
                 if not is_real_matrix(self.input.vckm()):
@@ -435,6 +435,9 @@ class Calculator(AbsCalculator):
         self._load_ewsb_parameters()
         self._check_other_input_validity()
         self._check_cpv_flv_consistency()
+        if self.output.sm is None or self.output.ewsb is None:
+            logger.error("Model set-up failed.")
+            exit(1)
         self._prepare_info()
         self._prepare_sm_ewsb()
         self._calculate_softmasses()
@@ -665,7 +668,7 @@ class Calculator(AbsCalculator):
                 )
             self.output.remove_block(s_type.slha2_output)
 
-        # A-terms and yukawas: only (3,3) elements are allowed
+        # A-terms and Yukawas: only (3,3) elements are allowed
         for t_type in A:
             a33 = self.output.get_float_assert(
                 t_type.out_t, (3, 3)
@@ -681,7 +684,7 @@ class Calculator(AbsCalculator):
             "USQMIX", [pid + 1 for pid in pid_base], lighter_lr_mixing=False
         )
         self._reorder_no_flv_mixing_matrix(
-            "DSQMIX", [pid for pid in pid_base], lighter_lr_mixing=False
+            "DSQMIX", [pid + 0 for pid in pid_base], lighter_lr_mixing=False
         )
         self._reorder_no_flv_mixing_matrix(
             "SELMIX", [pid + 10 for pid in pid_base], lighter_lr_mixing=False
@@ -722,13 +725,15 @@ class Calculator(AbsCalculator):
         )
 
         def failed() -> None:
-            raise RuntimeError(f"SLHA2 to SLHA1 conversion failed: {mixing}")
+            np.set_printoptions(precision=5, suppress=True)
+            logger.error("SLHA2-SLHA1 conversion failed: %s\n%s", matrix_name, mixing)
+            exit(1)
 
         threshold = 1e-10
         n = mixing.shape[0]
         order = [-1 for i in range(n)]
         for j in range(1, n + 1):
-            states = list()
+            states = []
             for i in range(1, n + 1):
                 if abs(mixing[i - 1][j - 1]) > threshold:
                     states.append(i)
@@ -759,7 +764,7 @@ class Calculator(AbsCalculator):
                         major, minor = states[0], states[1]
                     if abs(mixing[minor - 1][j - 1] > 0.01):
                         self.add_warning(
-                            f"large mixing {mixing[minor-1][j-1]} found in {pids[minor-1]}"
+                            f"large mixing {mixing[minor-1][j-1]} in {pids[minor-1]}"
                         )
                     order[j - 1] = major
                 for i in range(1, n + 1):
