@@ -1,6 +1,5 @@
 import logging
-from re import M
-from typing import List, Optional  # noqa: F401
+from typing import Optional
 
 import yaslha
 
@@ -64,7 +63,7 @@ class Calculator(simsusy.mssm.tree_calculator.Calculator):
             self.output.remove_block(name)
         self.output.remove_block("GAUGE")
 
-        # use FRALPHA insstead of ALPHA
+        # use FRALPHA instead of ALPHA
         self.output.slha["FRALPHA", 1] = self.output.get_float_assert("ALPHA", None)
         self.output.remove_block("ALPHA")
 

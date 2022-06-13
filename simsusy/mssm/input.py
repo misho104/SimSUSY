@@ -1,14 +1,6 @@
 import logging
 import math
-from typing import (
-    Any,
-    List,
-    Optional,
-    Sequence,
-    SupportsFloat,
-    TypeVar,
-    Union,
-)
+from typing import Any, Optional, TypeVar, Union
 
 import numpy as np
 import numpy.typing
