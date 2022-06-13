@@ -99,6 +99,19 @@ class AbsModel:
                     continue
                 self.slha[block_name, i + 1, j + 1] = m[i, j]
 
+    def set_complex_matrix(self, block_name, m, diagonal_only=False):
+        # type: (str, Matrix, bool) -> None
+        im_block_name = "IM" + block_name
+        self.set_matrix(block_name, m.real, diagonal_only)
+
+        if not np.all(np.isreal(m)):
+            self.set_matrix("IM" + block_name, m.imag, diagonal_only)
+        else:
+            if im_block_name in self.slha.blocks:
+                del self.slha.blocks[im_block_name]
+            if im_block_name in self._matrix_cache:
+                del self._matrix_cache[im_block_name]
+
     def get_matrix(self, block_name):
         # type: (str) -> Optional[RealMatrix]
         """Possibly get a real matrix block from the SLHA.

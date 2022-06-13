@@ -23,19 +23,19 @@ class Calculator(simsusy.mssm.tree_calculator.Calculator):
     def write_output(self, filename=None, slha1=False):
         # type: (Optional[str], bool)->None
         # MSSM_SLHA2 does not accept SLHA2 format of sfermion mixing.
-        pid_base = (1000001, 1000003, 1000005, 2000001, 2000003, 2000005)
-        self._reorder_no_flv_mixing_matrix(
-            "USQMIX", [pid + 1 for pid in pid_base], lighter_lr_mixing=False
+        pid_base = [1000001, 1000003, 1000005, 2000001, 2000003, 2000005]
+        self._reorder_mixing_matrix_in_flavor(
+            "USQMIX", [pid + 1 for pid in pid_base], lighter_gen_reorder=True
         )
-        self._reorder_no_flv_mixing_matrix(
-            "DSQMIX", [pid for pid in pid_base], lighter_lr_mixing=False
+        self._reorder_mixing_matrix_in_flavor(
+            "DSQMIX", pid_base, lighter_gen_reorder=True
         )
-        self._reorder_no_flv_mixing_matrix(
-            "SELMIX", [pid + 10 for pid in pid_base], lighter_lr_mixing=False
+        self._reorder_mixing_matrix_in_flavor(
+            "SELMIX", [pid + 10 for pid in pid_base], lighter_gen_reorder=True
         )
-        self._reorder_no_flv_mixing_matrix(
-            "SNUMIX", [1000012, 1000014, 1000016], lighter_lr_mixing=False
-        )
+        self._reorder_mixing_matrix_in_flavor("SNUMIX", [1000012, 1000014, 1000016])
+        for i in ["USQMIX", "DSQMIX", "SELMIX", "SNUMIX"]:
+            self._chop_mixing_matrix(i, threshold=1, keep_third_gen=True)
 
         # prepare DECAY blocks with zero width, since mg5's `compute_width` fails if
         # these are not provided.

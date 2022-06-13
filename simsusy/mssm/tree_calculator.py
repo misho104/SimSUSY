@@ -1,6 +1,6 @@
 import logging
 from math import atan, pi, sqrt
-from typing import List, Optional, TypeVar, Union  # noqa: F401
+from typing import List, Optional, Tuple, TypeVar, Union
 
 import numpy as np
 import numpy.typing
@@ -257,6 +257,14 @@ class Calculator(AbsCalculator):
         self.flv = FLV.NONE  # type: FLV
 
     def write_output(self, filename: Optional[str] = None, slha1: bool = False) -> None:
+        kill_blocks: List[str] = []
+        for block_name in self.output.blocks:
+            if block_name.startswith("IM"):
+                if not (abs(self.output.get_matrix_assert(block_name)).max() > 0):
+                    kill_blocks.append(block_name)
+        for block_name in kill_blocks:
+            del self.output.blocks[block_name]
+
         if slha1:
             if self.cpv == CPV.NONE and self.flv == FLV.NONE:
                 self.convert_slha2_to_slha1()
@@ -283,6 +291,9 @@ class Calculator(AbsCalculator):
         ]:
             if tmp in self.output.blocks:
                 self.output.blocks[tmp].q = 200  # TODO: more proper way...
+        # prepare SPINFO
+        self.output.slha["SPINFO", 3] = self._warnings
+        self.output.slha["SPINFO", 4] = self._errors
         self.output.write(filename)
 
     def _load_modsel(self) -> None:
@@ -294,23 +305,26 @@ class Calculator(AbsCalculator):
                 1,
             ):  # accept only general MSSM or mSUGRA. (no distinction)
                 self.add_error(
-                    f"Block MODSEL: {k} = {v} is invalid; should be 0 (or 1)."
+                    f"Invalid MODSEL {k}={v}; should be 0 (or 1).",
+                    f"Invalid MODSEL {k}={v}",
                 )
             elif (
                 k in [3, 4, 5] and v != 0
             ):  # tree_calculator handles only MSSM with no RpV/CPV.
-                self.add_error(f"Block MODSEL: {k} = {v} is invalid; should be 0.")
+                self.add_error(
+                    f"Invalid MODSEL {k}={v}; should be 0.", f"Invalid MODSEL {k}={v}"
+                )
             elif k == 6:
                 try:
                     self.flv = FLV(v)
                 except ValueError:
-                    self.add_error(f"Block MODSEL: {k} = {v} is invalid.")
+                    self.add_error(f"Invalid MODSEL {k}={v}")
             elif k == 11 and v != 1:
-                self.add_warning(f"Block MODSEL: {k} = {v} is ignored.")
+                self.add_warning(f"Ignored MODSEL {k}={v}")
             elif k == 12 or k == 21:  # defined in SLHA spec
-                self.add_warning(f"Block MODSEL: {k} = {v} is ignored.")
+                self.add_warning(f"Ignored MODSEL {k}={v}")
             else:
-                self.add_warning(f"Block MODSEL: {k} = {v} is ignored.")
+                self.add_warning(f"Ignored MODSEL {k}={v}")
 
     def _load_sminputs(self) -> None:
         sminputs = self.input.block("SMINPUTS")
@@ -319,19 +333,19 @@ class Calculator(AbsCalculator):
                 if not isinstance(k, int) or not (
                     1 <= k <= 8 or k in [11, 12, 13, 14, 21, 22, 23, 24]
                 ):
-                    self.add_warning(f"Block SMINPUTS: {k} = {v} is invalid.")
+                    self.add_warning(f"Invalid SMINPUTS {k}={v}")
         self.output.sm = SMParameters(self.input)
 
     def _load_ewsb_parameters(self) -> None:
         if self.input.get_complex("MINPAR", 3) and self.input.get_complex("EXTPAR", 25):
-            self.add_warning("TanBeta in MINPAR is ignored due to EXTPAR-25.")
+            self.add_warning("TB in MINPAR ignored due to EXTPAR 25.")
         try:
             assert isinstance(self.output.sm, SMParameters)
             self.output.ewsb = EWSBParameters(self.input, self.output.sm)
         except ValueError as e:
-            self.add_error(f"invalid EWSB specification ({e})")
+            self.add_error(f"invalid EWSB spec ({e})")
         except AssertionError:
-            logger.error("EWSB parameters are not loaded.")
+            logger.error("EWSB parameters not loaded.")
 
     def _check_other_input_validity(self) -> None:
         for name, content in self.input.blocks.items():
@@ -340,7 +354,7 @@ class Calculator(AbsCalculator):
             elif name == "MINPAR":
                 for k, v in content.items():
                     if not (isinstance(k, int) and 1 <= k <= 5):
-                        self.add_warning(f"Block {name}: {k} = {v} is ignored.")
+                        self.add_warning(f"Ignored {name} {k}={v}")
             elif name == "EXTPAR":
                 for k, v in content.items():
                     if not isinstance(k, int) or not (
@@ -349,29 +363,31 @@ class Calculator(AbsCalculator):
                         or 31 <= k <= 36
                         or 41 <= k <= 49
                     ):
-                        self.add_warning(f"Block {name}: {k} = {v} is ignored.")
+                        self.add_warning(f"Ignored {name} {k}={v}")
             elif name in ["QEXTPAR"]:
-                self.add_warning(f"BLOCK {name} is not supported and ignored.")
+                self.add_warning(f"Ignored {name}: not supported.")
             elif name in ["MSQ2IN", "MSU2IN", "MSD2IN", "MSL2IN", "MSE2IN"]:
                 for k, v in content.items():
                     if not (isinstance(k, tuple) and len(k) == 2):
-                        self.add_error(f"Block {name}: {k} = {v} is invalid.")
+                        self.add_error(f"Invalid {name} {k}={v}")
                     elif not (
                         1 <= k[0] <= 3 and k[0] <= k[1] <= 3
                     ):  # upper triangle only
                         self.add_warning(
-                            f"Block {name}: {k} = {v} is ignored; used upper triangle."
+                            f"Ignored {name} {k}={v}; used upper triangle.",
+                            f"Ignored {name} {k}={v}",
                         )
             elif name in ["TUIN", "TDIN", "TEIN"]:
                 for k, v in content.items():
                     if not (isinstance(k, tuple) and len(k) == 2):
-                        self.add_error(f"Block {name}: {k} = {v} is invalid.")
+                        self.add_error(f"Invalid {name} {k}={v}")
                     elif not (1 <= k[0] <= 3 and 1 <= k[1] <= 3):
                         self.add_warning(
-                            f"Block {name}: {k} = {v} is ignored; used upper triangle."
+                            f"Ignored {name} {k}={v}; used upper triangle.",
+                            f"Ignored {name} {k}={v}",
                         )
             else:
-                self.add_warning(f"Unknown block {name} is ignored.")
+                self.add_warning(f"Ignored {name}: unknown.")
 
     def _check_cpv_flv_consistency(self) -> None:
         # CPV consistency
@@ -679,19 +695,17 @@ class Calculator(AbsCalculator):
                 self.output.remove_value(t_type.out_y, (i, i))
 
         # mass and mixing: quark flavor rotation is reverted.
-        pid_base = (1000001, 1000003, 1000005, 2000001, 2000003, 2000005)
-        self._reorder_no_flv_mixing_matrix(
-            "USQMIX", [pid + 1 for pid in pid_base], lighter_lr_mixing=False
+        pid_base = [1000001, 1000003, 1000005, 2000001, 2000003, 2000005]
+        self._reorder_mixing_matrix_in_flavor(
+            "USQMIX", [pid + 1 for pid in pid_base], lighter_gen_reorder=True
         )
-        self._reorder_no_flv_mixing_matrix(
-            "DSQMIX", [pid + 0 for pid in pid_base], lighter_lr_mixing=False
+        self._reorder_mixing_matrix_in_flavor(
+            "DSQMIX", pid_base, lighter_gen_reorder=True
         )
-        self._reorder_no_flv_mixing_matrix(
-            "SELMIX", [pid + 10 for pid in pid_base], lighter_lr_mixing=False
+        self._reorder_mixing_matrix_in_flavor(
+            "SELMIX", [pid + 10 for pid in pid_base], lighter_gen_reorder=True
         )
-        self._reorder_no_flv_mixing_matrix(
-            "SNUMIX", [1000012, 1000014, 1000016], lighter_lr_mixing=False
-        )
+        self._reorder_mixing_matrix_in_flavor("SNUMIX", [1000012, 1000014, 1000016])
 
         for slha2, slha1 in (
             ("USQMIX", "STOPMIX"),
@@ -700,6 +714,16 @@ class Calculator(AbsCalculator):
         ):
             r = self.output.get_matrix(slha2)
             assert r is not None
+            warning, large_mix_value = "", 0.001
+            for i in range(6):
+                for j in range(6):
+                    if i == j or (i + j == 7 and i in [2, 5]):
+                        continue
+                    if (a := abs(r[i, j])) > large_mix_value:
+                        large_mix_value = a
+                        warning = f"Ignored {slha2} mixing (max={a:.4f} in {i+1},{j+1})"
+            if warning:
+                self.add_warning(warning)
             self.output.slha[slha1, 1, 1] = r[2][2]
             self.output.slha[slha1, 1, 2] = r[2][5]
             self.output.slha[slha1, 2, 1] = r[5][2]
@@ -713,68 +737,124 @@ class Calculator(AbsCalculator):
         for block_name in ("VCKM", "IMVCKM", "UPMNS", "IMUPMNS"):
             self.output.remove_block(block_name)
 
-    def _reorder_no_flv_mixing_matrix(self, matrix_name, pids, lighter_lr_mixing=True):
-        # type: (str, List[int], bool) -> None
-        mixing = self.output.get_matrix(matrix_name)
+    def __reorder_mixing_matrix(self, name, old_pids, order):
+        # type: (str, List[int], List[int])->None
+        n = len(order)
+        assert len(old_pids) == n and sorted(order) == list(range(n))
+        mixing = self.output.get_complex_matrix_assert(name)
+        masses: List[float] = [self.output.mass(p) for p in old_pids]  # type: ignore
+        assert None not in masses
 
-        assert isinstance(mixing, np.ndarray)
-        assert (
-            len(mixing.shape) == 2
-            and mixing.shape[0] == mixing.shape[1]
-            and mixing.shape[0] in (3, 6)
-        )
+        imaginary = "IM" + name in self.output.slha.blocks
+        for i, x in enumerate(order):
+            self.output.set_mass(old_pids[i], masses[x])
+            for j in range(n):
+                self.output.slha[name, i + 1, j + 1] = mixing[x, j].real
+                if imaginary:
+                    self.output.slha["IM" + name, i + 1, j + 1] = mixing[x, j].imag
+        del self.output._matrix_cache[name]
+        if imaginary:
+            del self.output._matrix_cache["IM" + name]
 
-        def failed() -> None:
-            np.set_printoptions(precision=5, suppress=True)
-            logger.error("SLHA2-SLHA1 conversion failed: %s\n%s", matrix_name, mixing)
+    def _reorder_mixing_matrix_in_flavor(self, name, pids, lighter_gen_reorder=False):
+        # type: (str, List[int],bool) -> None
+        """Reorder sfermion mixing matrix in flavor order.
+
+        Parameters
+        ----------
+        *matrix_name: str
+            The block name of the matrix to be reordered.
+        *pids: List[int]
+            The list of PDG IDs of the particles corresponding to the matrix.
+        *lighter_gen_reorder: bool
+            Noting that the 3rd generation particles are always ordered in their masses,
+            this flag determines if the treatment is also applied to the lighter ones.
+            If `False` (default), they are ordered in their masses.
+            If `True`, they are ordered according to the SLHA1 convention.
+        """
+        assert (n := len(pids)) in [3, 6]
+
+        mixing = self.output.get_complex_matrix(name)
+        if not isinstance(mixing, np.ndarray):
+            logger.warning("%s to be reordered is not a matrix.", name)
+            return
+        if not (len(mixing.shape) == 2 and mixing.shape[0] == mixing.shape[1] == n):
+            logger.error("%s to be reordered is not in proper shape.", name)
             exit(1)
 
-        threshold = 1e-10
-        n = mixing.shape[0]
-        order = [-1 for i in range(n)]
-        for j in range(1, n + 1):
-            states = []
-            for i in range(1, n + 1):
-                if abs(mixing[i - 1][j - 1]) > threshold:
-                    states.append(i)
-            if not 1 <= len(states) <= n // 3:
-                failed()
-            if n == 6 and (j % 3 == 0 or lighter_lr_mixing):  # with left-right mixing
-                if len(states) == 2:
-                    if j < 4:
-                        order[j - 1], order[j + 2] = states
-                    else:
-                        if not (
-                            order[j - 4] == states[0] and order[j - 1] == states[1]
-                        ):
-                            failed()
-                else:  # (1,0)(0,1) or (0,1)(1,0)
-                    order[j - 1] = states[0]
-                    if j > 3 and order[j - 4] > order[j - 1]:
-                        order[j - 4], order[j - 1] = order[j - 1], order[j - 4]
-            else:
-                if len(states) == 1:
-                    order[j - 1] = states[0]
-                else:
-                    if abs(mixing[states[0] - 1][j - 1]) < abs(
-                        mixing[states[1] - 1][j - 1]
-                    ):
-                        major, minor = states[1], states[0]
-                    else:
-                        major, minor = states[0], states[1]
-                    if abs(mixing[minor - 1][j - 1] > 0.01):
-                        self.add_warning(
-                            f"large mixing {mixing[minor-1][j-1]} in {pids[minor-1]}"
-                        )
-                    order[j - 1] = major
-                for i in range(1, n + 1):
-                    mixing[i - 1][j - 1] = (
-                        1 if i == order[j - 1] else 0
-                    )  # to chop the left-right mixing
+        m = mixing.copy()
 
-        masses = [self.output.mass(p) or float("nan") for p in pids]
-        new_mixing = mixing.copy()
+        def get_largest() -> Tuple[int, int]:
+            x, y, max_value = -1, -1, -1.0
+            for i in range(n):
+                for j in range(n):
+                    if (v := abs(m[i, j])) > max_value:
+                        x, y, max_value = i, j, v
+            return x, y
+
+        # first find the ordering based on the gauge eigenstates.
+        order = [-1 for i in range(n)]
         for i in range(n):
-            new_mixing[i] = mixing[order[i] - 1]
-            self.output.set_mass(pids[i], masses[order[i] - 1])
-        self.output.set_matrix(matrix_name, new_mixing)
+            pivot_x, pivot_y = get_largest()
+            order[pivot_y] = pivot_x
+            for j in range(n):
+                m[pivot_x, j] = 0
+        # then, for third generation, they are reordered in their masses.
+        # if lighter_gen_reorder is False this also applies to the lighter generations.
+        if n == 6:
+            for i in range(3):
+                if lighter_gen_reorder and i != 2:
+                    continue
+                il, ir = order[i], order[i + 3]
+                ml, mr = self.output.mass(pids[il]), self.output.mass(pids[ir])
+                assert ml and mr
+                if mr < ml:
+                    order[i], order[i + 3] = ir, il
+        self.__reorder_mixing_matrix(name, pids, order)
+
+    def _chop_mixing_matrix(self, name, threshold=1e-10, keep_third_gen=False):
+        # type: (str, float, bool) -> None
+        """Chop the mixing matrix to remove the small elements.
+
+        The key component of each row and each column are not chopped, for which this
+        method with `threshold=1` and `keep_third_gen=True` can be used to convert to
+        SLHA1 format.
+
+        ----------
+        *matrix_name: str
+            The block name of the matrix to be chopped.
+        *threshold: float
+            The criterion to chop. It can be any large, but 1/sqrt(2) is the meaningful
+            maximum.
+        *keep_third_gen: bool
+            If this is `True`, the (3, 6) and (6, 3) elements are always kept.
+        """
+        mixing = self.output.get_complex_matrix_assert(name)
+        abs_mix = abs(mixing)
+        is_modified = dict((i, False) for i in range(len(mixing)))
+
+        for (i, j), x in np.ndenumerate(mixing):
+            if not (abs_x := abs(x)):
+                continue
+            if (  # small, not 3rd-gen, and not key.
+                abs_x < threshold
+                and not (keep_third_gen and i in [2, 5] and j in [2, 5])
+                and (abs_mix[i].argmax() != j and abs_mix.argmax(axis=0)[j] != i)
+            ):
+                mixing[(i, j)] = 0
+                is_modified[i] = True
+            elif x.real and (r := abs(x.imag / x.real)) > 0:
+                if r < threshold:
+                    mixing[(i, j)] = x.real
+                elif r > 1 / threshold:
+                    mixing[(i, j)] = x.imag * 1j
+                    is_modified[i] = True
+        # keep unitarity at least in each row
+        for i, row in enumerate(mixing):
+            if not is_modified[i]:
+                continue
+            norm = sqrt(sum(pow2(abs(r)) for r in row))
+            for j, elem in enumerate(row):
+                mixing[i, j] = elem / norm
+        if any(is_modified.values()):
+            self.output.set_complex_matrix(name, mixing)

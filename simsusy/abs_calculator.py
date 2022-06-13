@@ -3,6 +3,8 @@ from typing import List, Optional, Tuple, Union  # noqa: F401
 
 from simsusy.abs_model import AbsModel
 
+MessageType = Union[str, Tuple[Union[str, int, float]]]
+
 
 class AbsCalculator:
     def __init__(
@@ -31,12 +33,14 @@ class AbsCalculator:
         else:
             return obj.__repr__()
 
-    def add_error(self, obj: Union[str, Tuple[Union[str, int, float]]]) -> None:
+    def add_error(self, obj, obj_slha=None):
+        # type: (MessageType, Optional[MessageType])->None
         message = self.to_message(obj)
-        self._errors.append(message)
+        self._errors.append(self.to_message(obj_slha) if obj_slha else message)
         self.logger.error(message)
 
-    def add_warning(self, obj: Union[str, Tuple[Union[str, int, float]]]) -> None:
+    def add_warning(self, obj, obj_slha=None):
+        # type: (MessageType, Optional[MessageType])->None
         message = self.to_message(obj)
-        self._warnings.append(message)
+        self._warnings.append(self.to_message(obj_slha) if obj_slha else message)
         self.logger.warning(message)
