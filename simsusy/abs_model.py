@@ -110,7 +110,7 @@ class AbsModel:
             return cache
         block = self.slha.blocks[block_name]
         if not isinstance(block, yaslha.slha.Block):
-            logger.warning(f"The block {block_name} is not found or not matrix-like.")
+            logger.warning("The block %s is not found or not matrix-like.", block_name)
             return None
         max_key = [0, 0]  # type: List[int]
         for key in block.keys():
@@ -127,7 +127,7 @@ class AbsModel:
         matrix = np.zeros(max_key)
         for x in range(0, max_key[0]):
             for y in range(0, max_key[1]):
-                entry = block.get((x, y), default=0)
+                entry = block.get((x + 1, y + 1), default=0)
                 if isinstance(entry, int) or isinstance(entry, float):
                     matrix[x, y] = entry
         self._matrix_cache[block_name] = matrix
@@ -137,7 +137,10 @@ class AbsModel:
         # type: (str) -> Optional[Matrix]
         """Possibly get a complex matrix block from the SLHA."""
         re_part = self.get_matrix(block_name)
-        im_part = self.get_matrix("IM" + block_name)
+        if "IM" + block_name in self.slha.blocks:
+            im_part = self.get_matrix("IM" + block_name)
+        else:
+            im_part = None
         if re_part is not None and im_part is not None:
             return re_part + im_part * 1j
         elif im_part is None and re_part is not None:
