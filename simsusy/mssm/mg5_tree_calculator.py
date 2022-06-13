@@ -34,7 +34,7 @@ class Calculator(simsusy.mssm.tree_calculator.Calculator):
         )
         self._reorder_mixing_matrix_in_flavor("SNUMIX", [1000012, 1000014, 1000016])
         for i in ["USQMIX", "DSQMIX", "SELMIX", "SNUMIX"]:
-            self._chop_mixing_matrix(i, threshold=1, keep_third_gen=True)
+            self._kill_lighter_gen_mixing(i)
 
         # prepare DECAY blocks with zero width, since mg5's `compute_width` fails if
         # these are not provided.

@@ -710,18 +710,8 @@ class Calculator(AbsCalculator):
             ("DSQMIX", "SBOTMIX"),
             ("SELMIX", "STAUMIX"),
         ):
-            r = self.output.get_matrix(slha2)
-            assert r is not None
-            warning, large_mix_value = "", 0.001
-            for i in range(6):
-                for j in range(6):
-                    if i == j or (i + j == 7 and i in [2, 5]):
-                        continue
-                    if (a := abs(r[i, j])) > large_mix_value:
-                        large_mix_value = a
-                        warning = f"Ignored {slha2} mixing (max={a:.4f} in {i+1},{j+1})"
-            if warning:
-                self.add_warning(warning)
+            self._kill_lighter_gen_mixing(slha2)
+            r = self.output.get_matrix_assert(slha2)
             self.output.slha[slha1, 1, 1] = r[2][2]
             self.output.slha[slha1, 1, 2] = r[2][5]
             self.output.slha[slha1, 2, 1] = r[5][2]
@@ -810,13 +800,11 @@ class Calculator(AbsCalculator):
                     order[i], order[i + 3] = ir, il
         self.__reorder_mixing_matrix(name, pids, order)
 
-    def _chop_mixing_matrix(self, name, threshold=1e-10, keep_third_gen=False):
-        # type: (str, float, bool) -> None
+    def _chop_mixing_matrix(self, name, threshold=1e-10):
+        # type: (str, float) -> None
         """Chop the mixing matrix to remove the small elements.
 
-        The key component of each row and each column are not chopped, for which this
-        method with `threshold=1` and `keep_third_gen=True` can be used to convert to
-        SLHA1 format.
+        The key component of each row and each column are not chopped.
 
         ----------
         *matrix_name: str
@@ -824,12 +812,27 @@ class Calculator(AbsCalculator):
         *threshold: float
             The criterion to chop. It can be any large, but 1/sqrt(2) is the meaningful
             maximum.
-        *keep_third_gen: bool
-            If this is `True`, the (3, 6) and (6, 3) elements are always kept.
         """
+        self.__chop_mixing_matrix(name, threshold, False, False)
+
+    def _kill_lighter_gen_mixing(self, name):
+        # type: (str) -> None
+        """Kill the off-diagonal mixing elements except for (3,6) and (6,3) entries.
+
+        ----------
+        *matrix_name: str
+            The block name of the matrix to be chopped.
+        """
+        self.__chop_mixing_matrix(name, 1, True, True)
+
+    def __chop_mixing_matrix(self, name, threshold, keep_third_gen, add_warnings):
+        # type: (str, float, bool, bool) -> None
+        """Chop small value, but also used to kill the lighter-gen mixings."""
+
         mixing = self.output.get_complex_matrix_assert(name)
         abs_mix = abs(mixing)
-        is_modified = dict((i, False) for i in range(len(mixing)))
+        is_modified = {i: False for i in range(len(mixing))}
+        chopped_max = (-1.0, 0, 0)
 
         for (i, j), x in np.ndenumerate(mixing):
             if not (abs_x := abs(x)):
@@ -841,18 +844,25 @@ class Calculator(AbsCalculator):
             ):
                 mixing[(i, j)] = 0
                 is_modified[i] = True
+                if abs_x > chopped_max[0]:
+                    chopped_max = (float(abs_x), i, j)
             elif x.real and (r := abs(x.imag / x.real)) > 0:
                 if r < threshold:
                     mixing[(i, j)] = x.real
+                    is_modified[i] = True
                 elif r > 1 / threshold:
                     mixing[(i, j)] = x.imag * 1j
                     is_modified[i] = True
         # keep unitarity at least in each row
         for i, row in enumerate(mixing):
-            if not is_modified[i]:
-                continue
-            norm = sqrt(sum(pow2(abs(r)) for r in row))
-            for j, elem in enumerate(row):
-                mixing[i, j] = elem / norm
+            if is_modified[i]:
+                norm = sqrt(sum(pow2(abs(r)) for r in row))
+                for j, elem in enumerate(row):
+                    mixing[i, j] = elem / norm
         if any(is_modified.values()):
             self.output.set_complex_matrix(name, mixing)
+        if chopped_max[0] > 0 and add_warnings:
+            self.add_warning(
+                f"Ignored {name} mixing (max={chopped_max[0]:.4f} "
+                f"in {chopped_max[1]+1},{chopped_max[2]+1})"
+            )
