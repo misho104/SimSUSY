@@ -141,7 +141,7 @@ class EWSBParameters(AbsEWSBParameters):
         cos_2beta = tan2costwo(self.tan_beta)
         sin_2beta = tan2sintwo(self.tan_beta)
         mz_sq = pow2(self.sm.mz())
-        mw_sq = pow2(self.sm.mw())
+        mw_sq = pow2(self.sm.mw())  # use tree level value (not 80.4)
 
         # first calculate mu if absent.
         if self.mu is None:
@@ -560,7 +560,7 @@ class Calculator(AbsCalculator):
         assert isinstance(self.output.ewsb.tan_beta, float)
         cb = tan2cos(self.output.ewsb.tan_beta)
         sb = tan2sin(self.output.ewsb.tan_beta)
-        sqrt2_mw = sqrt(2) * self.output.sm.mw()
+        sqrt2_mw = sqrt(2) * self.output.sm.mass(24)  # use pole value
         m2 = self.output.get_float("MSOFT", 2)
         mu = self.output.ewsb.mu
 
