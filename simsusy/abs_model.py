@@ -73,6 +73,9 @@ class AbsModel:
     def mass(self, pid: int) -> Optional[float]:
         return self.get_float("MASS", pid)
 
+    def mass_assert(self, pid: int) -> float:
+        return self.get_float_assert("MASS", pid)
+
     def width(self, pid: int) -> Optional[float]:
         try:
             return self.slha.decays[pid].width

@@ -1,3 +1,5 @@
+import itertools
+
 import logging
 from math import atan, pi, sqrt
 from typing import List, Optional, Tuple, TypeVar, Union
@@ -519,7 +521,8 @@ class Calculator(AbsCalculator):
         for pid in [25, 35, 36, 37]:
             self.output.set_mass(pid, self.output.ewsb.mass(pid))
 
-    def _calculate_neutralino(self) -> None:
+    def _neutralino_matrix(self) -> RealMatrix:
+        """Return the neutralino mass matrix, ignoring CPV."""
         assert isinstance(self.output.sm, SMParameters)
         assert isinstance(self.output.ewsb, EWSBParameters)
         # CPV ignored
@@ -532,17 +535,18 @@ class Calculator(AbsCalculator):
         m2 = self.output.get_float_assert("MSOFT", 2)
         mu = self.output.ewsb.mu
         assert mu
-
         # Since CPV is not supported, m_psi0 is real and nmix will be real.
-        m_psi0 = np.array(
+        return np.array(
             [
                 [m1, 0, -mz * cb * sw, mz * sb * sw],
                 [0, m2, mz * cb * cw, -mz * sb * cw],
                 [-mz * cb * sw, mz * cb * cw, 0, -mu.real],
                 [mz * sb * sw, -mz * sb * cw, -mu.real, 0],
             ]
-        )  # SLHA (21)
-        masses, nmix = autonne_takagi(m_psi0, try_real_mixing=True)
+        )  # SLHA.pdf Eq.(21)
+
+    def _calculate_neutralino(self) -> None:
+        masses, nmix = autonne_takagi(self._neutralino_matrix(), try_real_mixing=True)
         self.output.set_mass(1000022, masses[0])
         self.output.set_mass(1000023, masses[1])
         self.output.set_mass(1000025, masses[2])
@@ -695,13 +699,13 @@ class Calculator(AbsCalculator):
         # mass and mixing: quark flavor rotation is reverted.
         pid_base = [1000001, 1000003, 1000005, 2000001, 2000003, 2000005]
         self._reorder_mixing_matrix_in_flavor(
-            "USQMIX", [pid + 1 for pid in pid_base], lighter_gen_reorder=True
+            "USQMIX", [pid + 1 for pid in pid_base], lighter_gen_in_flavor=True
         )
         self._reorder_mixing_matrix_in_flavor(
-            "DSQMIX", pid_base, lighter_gen_reorder=True
+            "DSQMIX", pid_base, lighter_gen_in_flavor=True
         )
         self._reorder_mixing_matrix_in_flavor(
-            "SELMIX", [pid + 10 for pid in pid_base], lighter_gen_reorder=True
+            "SELMIX", [pid + 10 for pid in pid_base], lighter_gen_in_flavor=True
         )
         self._reorder_mixing_matrix_in_flavor("SNUMIX", [1000012, 1000014, 1000016])
 
@@ -744,40 +748,25 @@ class Calculator(AbsCalculator):
         if imaginary:
             del self.output._matrix_cache["IM" + name]
 
-    def _reorder_mixing_matrix_in_flavor(self, name, pids, lighter_gen_reorder=False):
-        # type: (str, List[int],bool) -> None
-        """Reorder sfermion mixing matrix in flavor order.
+    def _get_mixing_order_mass(self, name, pids):
+        # type: (str, List[int])->List[int]
+        masses = [(i, self.output.mass(p)) for i, p in enumerate(pids)]
+        masses.sort(key=lambda x: abs(x[1]) if x[1] else 0)
+        return [i for i, _ in masses]
 
-        Parameters
-        ----------
-        *matrix_name: str
-            The block name of the matrix to be reordered.
-        *pids: List[int]
-            The list of PDG IDs of the particles corresponding to the matrix.
-        *lighter_gen_reorder: bool
-            Noting that the 3rd generation particles are always ordered in their masses,
-            this flag determines if the treatment is also applied to the lighter ones.
-            If `False` (default), they are ordered in their masses.
-            If `True`, they are ordered according to the SLHA1 convention.
-        """
-        assert (n := len(pids)) in [3, 6]
-
+    def _get_mixing_order_flavor(self, name, pids, order_by_lr=(True, True, True)):
+        # type: (str, List[int], Tuple[bool, bool, bool])->List[int]
         mixing = self.output.get_complex_matrix(name)
-        if not isinstance(mixing, np.ndarray):
-            logger.warning("%s to be reordered is not a matrix.", name)
-            return
-        if not (len(mixing.shape) == 2 and mixing.shape[0] == mixing.shape[1] == n):
-            logger.error("%s to be reordered is not in proper shape.", name)
-            exit(1)
-
+        assert (n := len(pids)) in [3, 6]
+        assert isinstance(mixing, np.ndarray)
+        assert len(mixing.shape) == 2 and mixing.shape[0] == mixing.shape[1] == n
         m = mixing.copy()
 
         def get_largest() -> Tuple[int, int]:
             x, y, max_value = -1, -1, -1.0
-            for i in range(n):
-                for j in range(n):
-                    if (v := abs(m[i, j])) > max_value:
-                        x, y, max_value = i, j, v
+            for i, j in itertools.product(range(n), range(n)):
+                if (v := abs(m[i, j])) > max_value:
+                    x, y, max_value = i, j, v
             return x, y
 
         # first find the ordering based on the gauge eigenstates.
@@ -787,17 +776,35 @@ class Calculator(AbsCalculator):
             order[pivot_y] = pivot_x
             for j in range(n):
                 m[pivot_x, j] = 0
-        # then, for third generation, they are reordered in their masses.
-        # if lighter_gen_reorder is False this also applies to the lighter generations.
+        # then, if not order_by_lr for i-th generation, reorder in their masses.
         if n == 6:
             for i in range(3):
-                if lighter_gen_reorder and i != 2:
-                    continue
-                il, ir = order[i], order[i + 3]
-                ml, mr = self.output.mass(pids[il]), self.output.mass(pids[ir])
-                assert ml and mr
-                if mr < ml:
-                    order[i], order[i + 3] = ir, il
+                if not order_by_lr[i]:
+                    il, ir = order[i], order[i + 3]
+                    ml, mr = self.output.mass(pids[il]), self.output.mass(pids[ir])
+                    assert ml and mr
+                    if mr < ml:
+                        order[i], order[i + 3] = ir, il
+        return order
+
+    def _reorder_mixing_matrix_in_flavor(self, name, pids, lighter_gen_in_flavor=False):
+        # type: (str, List[int],bool) -> None
+        """Reorder sfermion mixing matrix in flavor order.
+
+        Parameters
+        ----------
+        *matrix_name: str
+            The block name of the matrix to be reordered.
+        *pids: List[int]
+            The list of PDG IDs of the particles corresponding to the matrix.
+        *lighter_gen_in_flavor: bool
+            Noting that the 3rd generation particles are always ordered in their masses,
+            this flag determines if the treatment is also applied to the lighter ones.
+            If `False` (default), they are ordered in mass.
+            If `True`, they are ordered in flavor, as in the SLHA1 convention.
+        """
+        lr_reorder = (lighter_gen_in_flavor, lighter_gen_in_flavor, False)
+        order = self._get_mixing_order_flavor(name, pids, lr_reorder)
         self.__reorder_mixing_matrix(name, pids, order)
 
     def _chop_mixing_matrix(self, name, threshold=1e-10):

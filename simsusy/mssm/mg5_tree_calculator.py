@@ -24,13 +24,13 @@ class Calculator(simsusy.mssm.tree_calculator.Calculator):
         # MSSM_SLHA2 does not accept SLHA2 format of sfermion mixing.
         pid_base = [1000001, 1000003, 1000005, 2000001, 2000003, 2000005]
         self._reorder_mixing_matrix_in_flavor(
-            "USQMIX", [pid + 1 for pid in pid_base], lighter_gen_reorder=True
+            "USQMIX", [pid + 1 for pid in pid_base], lighter_gen_in_flavor=True
         )
         self._reorder_mixing_matrix_in_flavor(
-            "DSQMIX", pid_base, lighter_gen_reorder=True
+            "DSQMIX", pid_base, lighter_gen_in_flavor=True
         )
         self._reorder_mixing_matrix_in_flavor(
-            "SELMIX", [pid + 10 for pid in pid_base], lighter_gen_reorder=True
+            "SELMIX", [pid + 10 for pid in pid_base], lighter_gen_in_flavor=True
         )
         self._reorder_mixing_matrix_in_flavor("SNUMIX", [1000012, 1000014, 1000016])
         for i in ["USQMIX", "DSQMIX", "SELMIX", "SNUMIX"]:
