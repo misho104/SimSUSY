@@ -13,7 +13,7 @@ import simsusy.abs_calculator
 import simsusy.abs_model
 
 __pkgname__ = "SimSUSY"
-__version__ = "0.2.0"
+__version__ = "0.3.0beta"
 __author__ = "Sho Iwamoto / Misho"
 __license__ = "MIT"
 

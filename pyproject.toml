@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "simsusy"
-version = "0.2.0"
+version = "0.3.0beta"
 description = "A Python package for simple SUSY spectrum calculation"
 authors = ["Sho Iwamoto (Misho) <webmaster@misho-web.com>"]
 license = "Apache 2.0"
