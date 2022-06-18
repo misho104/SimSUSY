@@ -1,5 +1,4 @@
 import itertools
-
 import logging
 from math import atan, pi, sqrt
 from typing import List, Optional, Tuple, TypeVar, Union

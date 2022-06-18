@@ -74,7 +74,7 @@ def tan2tantwo(tan: float) -> float:
 
 
 def chop_matrix(m, threshold=1e-7):
-    # type: (numpy.typing.NDArray[T], float)->numpy.typing.NDArray[T]
+    # type: (numpy.typing.NDArray[T], float)->Union[numpy.typing.NDArray[T], RealMatrix]
     nx, ny = m.shape
     for ix in range(0, nx):
         for iy in range(0, ny):
@@ -91,10 +91,13 @@ def chop_matrix(m, threshold=1e-7):
             elif v.real != 0 and v.imag != 0:
                 ratio = abs(v.imag / v.real)
                 if ratio < threshold:
-                    m[ix, iy] = v.real
+                    m[ix, iy] = float(v.real)
                 elif ratio > 1 / threshold:
                     m[ix, iy] = v.imag * 1j
-    return m
+    if np.iscomplexobj(m) and np.alltrue(np.isreal(m)):
+        return m.real
+    else:
+        return m
 
 
 def is_real_matrix(m: Any) -> bool:
@@ -134,7 +137,8 @@ def autonne_takagi(m, try_real_mixing=True):
         d = (np.conjugate(n) @ m @ np.conjugate(n.T)).diagonal()
         phases = np.diag([cmath.exp(-cmath.phase(x) / 2j) for x in d])
     n = phases @ n
-    return chop_matrix((np.conjugate(n) @ m @ np.conjugate(n.T))).diagonal(), n
+    nc = np.conjugate(n)
+    return chop_matrix((nc @ m @ nc.T)).diagonal(), chop_matrix(n)
 
 
 def singular_value_decomposition(m: Matrix) -> Tuple[RealMatrix, Matrix, Matrix]:

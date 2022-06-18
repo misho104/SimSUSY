@@ -120,3 +120,46 @@ class MSSMModel(AbsModel):
             for k, v in block.items():
                 if k == 1:
                     self.slha["MODSEL", k] = v
+
+    # NO CLEANING BECAUSE VERBOSE IS BETTER THAN AMBIGIOUS.
+    # def clean_zero(self) -> None:
+    #     """Clean zero elements from the model to have better output."""
+    #     for name in ["AU", "AD", "AE", "TU", "TD", "TE", "YU", "YD", "YE"]:
+    #         for head in ["", "IM"]:
+    #             if (block := self.slha.get(head + name)) is None:
+    #                 continue
+    #             to_kill_block = head == "IM"
+    #             line_to_kill = []  # type: List[str]
+    #             for key, value in block.items():
+    #                 if value == 0:
+    #                     # diagonal elements must exist, otherwise SDecay complains.
+    #                     if head == "IM" or not key[0] == key[1]:
+    #                         line_to_kill.append(key)
+    #                 else:
+    #                     to_kill_block = False
+    #             if to_kill_block:
+    #                 del self.slha[block]
+    #             else:
+    #                 for key in line_to_kill:
+    #                     del block[key]
+    #     for name in (
+    #         ["MSQ2", "MSU2", "MSD2", "MSL2", "MSE2"]
+    #         + ["USQMIX", "DSQMIX", "SELMIX", "SNUMIX", "STOPMIX", "SBOTMIX", "STAUMIX"]
+    #         + ["NMIX", "UMIX", "VMIX", "VCKM", "UPMNS"]
+    #     ):
+    #         for head in ["", "IM"]:
+    #             if (block := self.slha.get(head + name)) is None:
+    #                 continue
+    #             to_kill_block = head == "IM"
+    #             line_to_kill = []
+    #             for key, value in block.items():
+    #                 if value == 0:
+    #                     if head == "IM" or not key[0] == key[1]:
+    #                         line_to_kill.append(key)
+    #                 else:
+    #                     to_kill_block = False
+    #             if to_kill_block:
+    #                 del self.slha[block]
+    #             else:
+    #                 for key in line_to_kill:
+    #                     del block[key]
