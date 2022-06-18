@@ -292,25 +292,23 @@ class Calculator(AbsCalculator):
             if tmp in self.output.blocks:
                 self.output.blocks[tmp].q = 200  # TODO: more proper way...
         # prepare SPINFO
-        self.output.slha["SPINFO", 3] = self._warnings
-        self.output.slha["SPINFO", 4] = self._errors
+        self.output.slha["SPINFO", 3] = list(sorted(set(self._warnings)))
+        self.output.slha["SPINFO", 4] = list(sorted(set(self._errors)))
         self.output.write(filename)
 
     def _load_modsel(self) -> None:
         modsel = self.input.block("MODSEL")
         assert isinstance(modsel, yaslha.slha.Block)
         for k, v in modsel.items():
-            if k == 1 and v not in (
-                0,
-                1,
-            ):  # accept only general MSSM or mSUGRA. (no distinction)
-                self.add_error(
-                    f"Invalid MODSEL {k}={v}; should be 0 (or 1).",
-                    f"Invalid MODSEL {k}={v}",
-                )
-            elif (
-                k in [3, 4, 5] and v != 0
-            ):  # tree_calculator handles only MSSM with no RpV/CPV.
+            if k == 1:
+                if v not in (0, 1):
+                    # accept only general MSSM or mSUGRA. (no distinction)
+                    self.add_error(
+                        f"Invalid MODSEL {k}={v}; should be 0 (or 1).",
+                        f"Invalid MODSEL {k}={v}",
+                    )
+            elif k in [3, 4, 5] and v != 0:
+                # tree_calculator handles only MSSM with no RpV/CPV.
                 self.add_error(
                     f"Invalid MODSEL {k}={v}; should be 0.", f"Invalid MODSEL {k}={v}"
                 )
