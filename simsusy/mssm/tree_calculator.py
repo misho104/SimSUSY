@@ -686,15 +686,23 @@ class Calculator(AbsCalculator):
                 )
             self.output.remove_block(s_type.slha2_output)
 
-        # A-terms and Yukawas: only (3,3) elements are allowed
+        # A-terms and Yukawas
+        #     SLHA1 allows only (3,3) element but SDecay assumes (1,1) and (2,2) exist.
+        #     Hope that other programs does not complain it...
+        # for t_type in A:
+        #     a33 = self.output.get_float_assert(
+        #         t_type.out_t, (3, 3)
+        #     ) / self.output.get_float_assert(t_type.out_y, (3, 3))
+        #     self.output.slha[t_type.out_a, 3, 3] = a33
+        #     self.output.remove_block(t_type.out_t)
+        #     for i in (1, 2):
+        #         self.output.remove_value(t_type.out_y, (i, i))
         for t_type in A:
-            a33 = self.output.get_float_assert(
-                t_type.out_t, (3, 3)
-            ) / self.output.get_float_assert(t_type.out_y, (3, 3))
-            self.output.slha[t_type.out_a, 3, 3] = a33
+            for i in (1, 2, 3):
+                self.output.slha[t_type.out_a, i, i] = self.output.get_float_assert(
+                    t_type.out_t, (i, i)
+                ) / self.output.get_float_assert(t_type.out_y, (i, i))
             self.output.remove_block(t_type.out_t)
-            for i in (1, 2):
-                self.output.remove_value(t_type.out_y, (i, i))
 
         # mass and mixing: quark flavor rotation is reverted.
         pid_base = [1000001, 1000003, 1000005, 2000001, 2000003, 2000005]
