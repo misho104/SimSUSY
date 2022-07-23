@@ -706,13 +706,13 @@ class Calculator(AbsCalculator):
         # mass and mixing: quark flavor rotation is reverted.
         pid_base = [1000001, 1000003, 1000005, 2000001, 2000003, 2000005]
         self._reorder_mixing_matrix_in_flavor(
-            "USQMIX", [pid + 1 for pid in pid_base], lighter_gen_in_flavor=True
+            "USQMIX", [pid + 1 for pid in pid_base], lighter_gen_in_lr=True
         )
         self._reorder_mixing_matrix_in_flavor(
-            "DSQMIX", pid_base, lighter_gen_in_flavor=True
+            "DSQMIX", pid_base, lighter_gen_in_lr=True
         )
         self._reorder_mixing_matrix_in_flavor(
-            "SELMIX", [pid + 10 for pid in pid_base], lighter_gen_in_flavor=True
+            "SELMIX", [pid + 10 for pid in pid_base], lighter_gen_in_lr=True
         )
         self._reorder_mixing_matrix_in_flavor("SNUMIX", [1000012, 1000014, 1000016])
 
@@ -794,7 +794,7 @@ class Calculator(AbsCalculator):
                         order[i], order[i + 3] = ir, il
         return order
 
-    def _reorder_mixing_matrix_in_flavor(self, name, pids, lighter_gen_in_flavor=False):
+    def _reorder_mixing_matrix_in_flavor(self, name, pids, lighter_gen_in_lr=False):
         # type: (str, List[int],bool) -> None
         """Reorder sfermion mixing matrix in flavor order.
 
@@ -804,13 +804,13 @@ class Calculator(AbsCalculator):
             The block name of the matrix to be reordered.
         *pids: List[int]
             The list of PDG IDs of the particles corresponding to the matrix.
-        *lighter_gen_in_flavor: bool
+        *lighter_gen_in_lr: bool
             Noting that the 3rd generation particles are always ordered in their masses,
             this flag determines if the treatment is also applied to the lighter ones.
             If `False` (default), they are ordered in mass.
-            If `True`, they are ordered in flavor, as in the SLHA1 convention.
+            If `True`, they are ordered by "LR" order, as in the SLHA1 convention.
         """
-        lr_reorder = (lighter_gen_in_flavor, lighter_gen_in_flavor, False)
+        lr_reorder = (lighter_gen_in_lr, lighter_gen_in_lr, False)
         order = self._get_mixing_order_flavor(name, pids, lr_reorder)
         self.__reorder_mixing_matrix(name, pids, order)
 
