@@ -1,5 +1,5 @@
 import logging
-from typing import Optional
+from typing import List, Optional
 
 import yaslha
 
@@ -21,20 +21,33 @@ class Calculator(simsusy.mssm.tree_calculator.Calculator):
 
     def write_output(self, filename=None, slha1=False):
         # type: (Optional[str], bool)->None
-        # MSSM_SLHA2 does not accept SLHA2 format of sfermion mixing.
-        pid_base = [1000001, 1000003, 1000005, 2000001, 2000003, 2000005]
-        self._reorder_mixing_matrix_in_flavor(
-            "USQMIX", [pid + 1 for pid in pid_base], lighter_gen_in_lr=True
-        )
-        self._reorder_mixing_matrix_in_flavor(
-            "DSQMIX", pid_base, lighter_gen_in_lr=True
-        )
-        self._reorder_mixing_matrix_in_flavor(
-            "SELMIX", [pid + 10 for pid in pid_base], lighter_gen_in_lr=True
-        )
-        self._reorder_mixing_matrix_in_flavor("SNUMIX", [1000012, 1000014, 1000016])
-        for i in ["USQMIX", "DSQMIX", "SELMIX", "SNUMIX"]:
-            self._kill_lighter_gen_mixing(i)
+        kill_blocks: List[str] = []
+        for block_name in self.output.blocks:
+            if block_name.startswith("IM"):
+                if not (abs(self.output.get_matrix_assert(block_name)).max() > 0):
+                    kill_blocks.append(block_name)
+        for block_name in kill_blocks:
+            del self.output.blocks[block_name]
+
+        if slha1:
+            logger.warning("MSSM_SLHA2 model requires SLHA2. Output will be invalid.")
+        else:
+            # MSSM_SLHA2 does not support IMNMIX but allows negative mass.
+
+            # MSSM_SLHA2 does not accept SLHA2 format of sfermion mixing.
+            pid_base = [1000001, 1000003, 1000005, 2000001, 2000003, 2000005]
+            self._reorder_mixing_matrix_in_flavor(
+                "USQMIX", [pid + 1 for pid in pid_base], lighter_gen_in_lr=True
+            )
+            self._reorder_mixing_matrix_in_flavor(
+                "DSQMIX", pid_base, lighter_gen_in_lr=True
+            )
+            self._reorder_mixing_matrix_in_flavor(
+                "SELMIX", [pid + 10 for pid in pid_base], lighter_gen_in_lr=True
+            )
+            self._reorder_mixing_matrix_in_flavor("SNUMIX", [1000012, 1000014, 1000016])
+            for i in ["USQMIX", "DSQMIX", "SELMIX", "SNUMIX"]:
+                self._kill_lighter_gen_mixing(i)
 
         # prepare DECAY blocks with zero width, since mg5's `compute_width` fails if
         # these are not provided.
@@ -67,6 +80,32 @@ class Calculator(simsusy.mssm.tree_calculator.Calculator):
         self.output.slha["FRALPHA", 1] = self.output.get_float_assert("ALPHA", None)
         self.output.remove_block("ALPHA")
 
+        for tmp in [
+            "HMIX",
+            "GAUGE",
+            "MSOFT",
+            "MSQ2",
+            "MSU2",
+            "MSD2",
+            "MSL2",
+            "MSE2",
+            "AU",
+            "AD",
+            "AE",
+            "TU",
+            "TD",
+            "TE",
+            "YU",
+            "YD",
+            "YE",
+        ]:
+            if tmp in self.output.blocks:
+                self.output.blocks[tmp].q = 200  # TODO: more proper way...
+
+        # prepare SPINFO
+        self.output.slha["SPINFO", 3] = list(sorted(set(self._warnings)))
+        self.output.slha["SPINFO", 4] = list(sorted(set(self._errors)))
+
         # dumper configuration
         self.output.dumper = yaslha.dumper.SLHADumper(
             separate_blocks=True,
@@ -86,9 +125,7 @@ class Calculator(simsusy.mssm.tree_calculator.Calculator):
                 "TEIN",
             ],
         )
-
-        # done
-        super().write_output(filename, slha1)
+        self.output.write(filename)
 
     def _load_modsel(self) -> None:
         super()._load_modsel()

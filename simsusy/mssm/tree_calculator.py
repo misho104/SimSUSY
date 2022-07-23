@@ -271,6 +271,22 @@ class Calculator(AbsCalculator):
                 self.convert_slha2_to_slha1()
             else:
                 self.add_warning("SLHA1 does not support CPV/FLV.")
+        else:
+            # It seems that SLHA2 does not allow negative mass for neutralinos.
+            # Then it is better to always provide IMNMIX.
+            neut_masses = [
+                (pid, self.output.mass_assert(pid))
+                for pid in [1000022, 1000023, 1000025, 1000035]
+            ]
+            for i, (pid, mass) in enumerate(neut_masses):
+                for j in range(4):
+                    mix = self.output.get_complex_assert("NMIX", i + 1, j + 1)
+                    if mass < 0:
+                        self.output.set_mass(pid, abs(mass))
+                        mix = mix / 1j
+                    self.output.slha["NMIX", i + 1, j + 1] = mix.real
+                    self.output.slha["IMNMIX", i + 1, j + 1] = mix.imag
+
         for tmp in [
             "HMIX",
             "GAUGE",
@@ -292,9 +308,31 @@ class Calculator(AbsCalculator):
         ]:
             if tmp in self.output.blocks:
                 self.output.blocks[tmp].q = 200  # TODO: more proper way...
+
         # prepare SPINFO
         self.output.slha["SPINFO", 3] = list(sorted(set(self._warnings)))
         self.output.slha["SPINFO", 4] = list(sorted(set(self._errors)))
+
+        # dumper configuration
+        self.output.dumper = yaslha.dumper.SLHADumper(
+            separate_blocks=True,
+            comments_preserve=yaslha.dumper.CommentsPreserve.TAIL,
+            document_blocks=[
+                "MODSEL",
+                "MINPAR",
+                "EXTPAR",
+                "VCKMIN",
+                "UPMNSIN",
+                "MSQ2IN",
+                "MSU2IN",
+                "MSD2IN",
+                "MSL2IN",
+                "MSE2IN",
+                "TUIN",
+                "TDIN",
+                "TEIN",
+            ],
+        )
         self.output.write(filename)
 
     def _load_modsel(self) -> None:

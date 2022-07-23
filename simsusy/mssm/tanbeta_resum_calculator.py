@@ -302,23 +302,6 @@ class Calculator(simsusy.mssm.tree_calculator.Calculator):
     def write_output(self, filename=None, slha1=False):
         # type: (Optional[str], bool)->None
         """Write output to file."""
-
-        # It seems that SLHA2 does not allow negative mass for neutralinos.
-        # Then it is better to always provide IMNMIX.
-        if not slha1:
-            neut_masses = [
-                (pid, self.output.mass_assert(pid))
-                for pid in [1000022, 1000023, 1000025, 1000035]
-            ]
-            for i, (pid, mass) in enumerate(neut_masses):
-                for j in range(4):
-                    mix = self.output.get_complex_assert("NMIX", i + 1, j + 1)
-                    if mass < 0:
-                        self.output.set_mass(pid, abs(mass))
-                        mix = mix / 1j
-                    self.output.slha["NMIX", i + 1, j + 1] = mix.real
-                    self.output.slha["IMNMIX", i + 1, j + 1] = mix.imag
-
         pid_base = [1000001, 1000003, 1000005, 2000001, 2000003, 2000005]
         pid_snu = [1000012, 1000014, 1000016]
         self._reorder_mixing_matrix_in_flavor("DSQMIX", pid_base)
