@@ -31,6 +31,12 @@ pep8-naming = "^0.13"
 [tool.poetry.scripts]
 simsusy = "simsusy.simsusy:simsusy_main"
 
+[tool.docformatter]
+recursive = true
+wrap-summaries = 79
+wrap-descriptions = 79
+pre-summary-newline = true
+
 [build-system]
 requires = ["poetry>=1.1.13"]
 build-backend = "poetry.masonry.api"

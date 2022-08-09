@@ -1,3 +1,16 @@
+"""
+Abstract class for a model.
+
+A model corresponds to an SLHA file, i.e., a set of parameters of any
+model. It is usually an input file or an output (calculated) file.
+This class provides basic I/O functions of an integer, a float, or a
+matrix, and a complex value or a complex matrix, where the "IM"
+convention is assumed.
+
+In the early version, matrices are cached, but this feature is removed
+to simplify the codes.
+"""
+
 import logging
 import pathlib
 from typing import (  # noqa: F401
