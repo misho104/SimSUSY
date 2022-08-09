@@ -111,14 +111,10 @@ class TestAbsModelWithGenericInput(unittest.TestCase):
         assert self.slha.get_int("DoubleArgBlock", (2, 2)) == 4
         assert_almost_equal(self.slha.get_float("noargblocka", None), 3.1415926535)
 
-        assert self.slha.get_int("OneArgBlock", 123456) is None
-        assert self.slha.get_int("NotExistingBlock", 1) is None
-        assert self.slha.get_int_assert("OneArgBlock", 123456, default=789) == 789
-        assert self.slha.get_int_assert("NotExistingBlock", 1, default=789) == 789
-
-    def test_mass(self):
-        assert self.slha.mass(6) == 175
-        assert self.slha.mass(12345) is None
+        assert self.slha.get_int("OneArgBlock", 123456, default=None) is None
+        assert self.slha.get_int("NotExistingBlock", 1, default=None) is None
+        assert self.slha.get_int("OneArgBlock", 123456, default=789) == 789
+        assert self.slha.get_int("NotExistingBlock", 1, default=789) == 789
 
     def test_width(self):
         assert_almost_equal(self.slha.width(6), 1.45899677)

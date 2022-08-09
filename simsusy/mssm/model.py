@@ -1,4 +1,6 @@
-from typing import Any, Dict, List, Optional  # noqa: F401
+"""The parameter set of the MSSM."""
+
+from typing import Any, Dict, Optional
 
 import yaslha
 
@@ -8,6 +10,8 @@ from simsusy.mssm.input import A, MSSMInput, S  # noqa: F401
 
 
 class MSSMModel(AbsModel):
+    """The parameter set of the MSSM."""
+
     def __init__(self, *args: Any) -> None:
         super().__init__(*args)
         self.input = None  # type: Optional[MSSMInput]
@@ -15,6 +19,7 @@ class MSSMModel(AbsModel):
         self.ewsb = None  # type: Optional[AbsEWSBParameters]
 
     def write(self, filename: Optional[str] = None) -> None:
+        """Output the model."""
         self._prepare_input_parameters()
         super().write(filename)
 
@@ -36,7 +41,7 @@ class MSSMModel(AbsModel):
             4: True,
             5: False,
         }  # type: Dict[int, bool]
-        extpar_used = dict()  # type: Dict[int, bool]
+        extpar_used = {}  # type: Dict[int, bool]
         for sfermion in [S.QL, S.UR, S.DR, S.LL, S.ER]:
             block = self.input.block(sfermion.slha2_input)
             assert not isinstance(block, yaslha.slha.InfoBlock)
@@ -85,7 +90,7 @@ class MSSMModel(AbsModel):
                 else:
                     minpar_used[5] = True
 
-        ewsb_params = list()  # Type: List[int]
+        ewsb_params = []  # Type: List[int]
         for key in [21, 22, 23, 24, 25, 26, 27]:
             v = block.get(key, default=None) if block else None
             if v is not None:
@@ -121,7 +126,7 @@ class MSSMModel(AbsModel):
                 if k == 1:
                     self.slha["MODSEL", k] = v
 
-    # NO CLEANING BECAUSE VERBOSE IS BETTER THAN AMBIGIOUS.
+    # NO CLEANING BECAUSE VERBOSE IS BETTER THAN AMBIGUOUS.
     # def clean_zero(self) -> None:
     #     """Clean zero elements from the model to have better output."""
     #     for name in ["AU", "AD", "AE", "TU", "TD", "TE", "YU", "YD", "YE"]:
@@ -144,7 +149,7 @@ class MSSMModel(AbsModel):
     #                     del block[key]
     #     for name in (
     #         ["MSQ2", "MSU2", "MSD2", "MSL2", "MSE2"]
-    #         + ["USQMIX", "DSQMIX", "SELMIX", "SNUMIX", "STOPMIX", "SBOTMIX", "STAUMIX"]
+    #         + ["USQMIX", "DSQMIX", "SELMIX", "SNUMIX", "STOPMIX", "SBOTMIX","STAUMIX"]
     #         + ["NMIX", "UMIX", "VMIX", "VCKM", "UPMNS"]
     #     ):
     #         for head in ["", "IM"]:

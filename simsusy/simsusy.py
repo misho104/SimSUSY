@@ -1,10 +1,10 @@
 #!/usr/bin/env python
-
+"""The main module for the simsusy package."""
 import importlib
 import logging
 import pathlib
 import types
-from typing import Any, Dict, KeysView, Optional, ValuesView  # noqa: F401
+from typing import Any, Dict, KeysView, List, Optional, ValuesView
 
 import click
 import coloredlogs
@@ -27,7 +27,7 @@ class Calculators:
 
     def __init__(self) -> None:
         cwd = pathlib.Path(__file__).parent.resolve()
-        self.calculators = dict()  # type: Dict[str, pathlib.Path]
+        self.calculators = {}  # type: Dict[str, pathlib.Path]
         for calculator_file in cwd.glob("*/*_calculator.py"):
             relative_path = calculator_file.resolve().relative_to(cwd)
             module_name = ".".join(relative_path.with_suffix("").parts)
@@ -35,6 +35,7 @@ class Calculators:
 
     @classmethod
     def is_valid(cls, mod: Any) -> bool:
+        """Check if the module has Calculator, Input, and Output classes."""
         if not isinstance(mod, types.ModuleType):
             return False
         return (
@@ -47,15 +48,17 @@ class Calculators:
         return self.calculators.__getitem__(key)
 
     def get(self, name: str) -> Optional[pathlib.Path]:
+        """Get the path of the calculator."""
         return self.calculators.get(name)
 
     def guess(self, name: str) -> Optional[pathlib.Path]:
+        """Guess the path of the calculator."""
         if name in self.calculators:
             return self.calculators[name]
         if name.count(".") != 1:
             return None
         model, calc = name.lower().split(".")
-        candidates = list()
+        candidates = []  # type: List[str]
         for i in self.calculators.keys():
             i_model, i_calc = i.lower().split(".")
             if i_model.startswith(model) and i_calc.startswith(calc):
@@ -64,21 +67,23 @@ class Calculators:
             return self.calculators[candidates[0]]
         else:
             if candidates:
-                logger.error(f"The calculator specification {name} is ambiguous:")
+                logger.error("The calculator specification %s is ambiguous:", name)
                 for i in candidates:
-                    logger.error(f"\t{i}")
+                    logger.error("\t%s", i)
             return None
 
     def keys(self) -> KeysView[str]:
+        """Get the names of the calculators."""
         return self.calculators.keys()
 
     def values(self) -> ValuesView[pathlib.Path]:
+        """Get the paths to the calculators."""
         return self.calculators.values()
 
 
 @click.group(
     help="Handle the references for high-energy physics",
-    context_settings=dict(help_option_names=["-h", "--help"]),
+    context_settings={"help_option_names": ["-h", "--help"]},
 )
 @click.option("--debug", is_flag=True, help="Display debug information for exceptions.")
 @click.version_option(__version__, "-V", "--version", prog_name=__pkgname__)
@@ -88,9 +93,10 @@ class Calculators:
 # )
 def simsusy_main(context, **kwargs):
     # type: (click.Context, **Dict[str, Any]) -> None
+    """Invoke the Click command."""
     coloredlogs.install(logger=logging.getLogger(), fmt="%(levelname)8s %(message)s")
     if context.obj is None:
-        context.obj = dict()
+        context.obj = {}
     context.obj["DEBUG"] = kwargs["debug"] if "debug" in kwargs else False
 
 
@@ -100,35 +106,35 @@ def simsusy_main(context, **kwargs):
 @click.argument("output", type=click.Path(dir_okay=False), required=False)
 @click.option("--v1", is_flag=True, help="Try to output in SLHA1 format")
 @click.pass_context
-def run(context, calculator, input, output, v1):
+def run(context, calculator, input, output, v1):  # noqa: A002
     # type: (click.Context, str, click.Path, Optional[click.Path], bool) -> None
+    """Invoke the Run command, which runs the calculator."""
     calculators = Calculators()
     guessed_calculator = calculators.guess(calculator)
     if guessed_calculator is None:
-        logger.error(
-            f'calculator "{calculator}" not found.\n\nAvailable calculators are:'
-        )
+        logger.error('calculator "%s" not found.')
+        logger.info("Available calculators are:")
         max_length = max(len(name) for name in calculators.keys())
         for name in calculators.keys():
-            logger.error(f"\t{name:<{max_length}}\t({calculators[name]})")
+            logger.info("\t%s\t(%s)", name.ljust(max_length), str(calculators[name]))
         exit(1)
     module_name = ".".join(guessed_calculator.with_suffix("").parts)
     try:
         mod = importlib.import_module(module_name)
     except ModuleNotFoundError as e:
-        logger.error(f"Calculator {calculator} cannot be imported.")
+        logger.error("Calculator %s cannot be imported.", calculator)
         if context.obj["DEBUG"]:
             raise e
         else:
-            logger.error("Following exception is caught: " + str(e))
+            logger.exception("Exception raised.")
             logger.error("Run with --debug option to see stack trace.")
         exit(1)
     if not calculators.is_valid(mod):
-        logger.error(f"Calculator {calculator} imported but invalid.")
+        logger.error("Calculator %s imported but invalid.", calculator)
         if context.obj["DEBUG"]:
-            logger.error(f"Debug information: {mod.__dict__}")
+            logger.error("Debug information: %s", mod.__dict__)
             for i in ["Calculator", "Input", "Output"]:
-                logger.error(f"\t{i}\t{getattr(mod, i, '(Not found)')}")
+                logger.error("\t%s\t%s", i, getattr(mod, i, "(Not found)"))
         else:
             logger.error("Run with --debug option to see information.")
         exit(1)

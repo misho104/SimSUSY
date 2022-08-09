@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 class Calculator(simsusy.mssm.tree_calculator.Calculator):
-    name = simsusy.simsusy.__pkgname__ + "/MSSMTree"
+    name = simsusy.simsusy.__pkgname__ + "/MSSMMG5Tree"
     version = simsusy.simsusy.__version__
 
     def __init__(self, input: Input) -> None:
@@ -24,7 +24,7 @@ class Calculator(simsusy.mssm.tree_calculator.Calculator):
         kill_blocks: List[str] = []
         for block_name in self.output.blocks:
             if block_name.startswith("IM"):
-                if not (abs(self.output.get_matrix_assert(block_name)).max() > 0):
+                if not (abs(self.output.get_matrix(block_name)).max() > 0):
                     kill_blocks.append(block_name)
         for block_name in kill_blocks:
             del self.output.blocks[block_name]
@@ -77,7 +77,7 @@ class Calculator(simsusy.mssm.tree_calculator.Calculator):
         self.output.remove_block("GAUGE")
 
         # use FRALPHA instead of ALPHA
-        self.output.slha["FRALPHA", 1] = self.output.get_float_assert("ALPHA", None)
+        self.output.slha["FRALPHA", 1] = self.output.get_float("ALPHA", None)
         self.output.remove_block("ALPHA")
 
         for tmp in [

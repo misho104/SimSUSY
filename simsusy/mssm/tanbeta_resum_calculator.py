@@ -313,25 +313,4 @@ class Calculator(simsusy.mssm.tree_calculator.Calculator):
         self._chop_mixing_matrix("SELMIX")
         self._chop_mixing_matrix("SNUMIX")
 
-        # dumper configuration
-        self.output.dumper = yaslha.dumper.SLHADumper(
-            separate_blocks=True,
-            comments_preserve=yaslha.dumper.CommentsPreserve.TAIL,
-            document_blocks=[
-                "MODSEL",
-                "MINPAR",
-                "EXTPAR",
-                "VCKMIN",
-                "UPMNSIN",
-                "MSQ2IN",
-                "MSU2IN",
-                "MSD2IN",
-                "MSL2IN",
-                "MSE2IN",
-                "TUIN",
-                "TDIN",
-                "TEIN",
-            ],
-        )
-        # done
         super().write_output(filename, slha1)

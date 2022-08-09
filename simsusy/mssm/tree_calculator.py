@@ -1,7 +1,53 @@
+"""
+Tree-level MSSM calculator.
+
+Convention of the output SLHA file can be specified in `SIMSUSY` block:
+
+  - 101: whether to include (0, default) or hide (1) warnings in SPINFO.
+
+  - 111: (SLHA2 only) whether to allow negative MASS value of neutralinos.
+       * 0 (default) to take neutralino masses to be positive and allow complex
+         NMIX matrix (with IMNMIX). This is the original SLHA2 convention.
+       * 1 to mimic SLHA1 convention, where, as long as the neutralino sector
+         has no CP-violation, NMIX is forced to be real and MASS block may have
+         negative entries.
+
+  - 131: (SLHA2 only) order of the down-type squark sector (DSQMIX)
+  - 132: (SLHA2 only) order of the up-type squark (USQMIX)
+  - 133: (SLHA2 only) order of the charged lepton sector (SELMIX)
+  - 134: (SLHA2 only) order of the sneutrino sector (SNUMIX)
+       * 0 (default) to order the sfermion ascending in their mass, which is
+         the original SLHA2 convention.
+       * 1xyz to sort them in the flavor order (e.g., u-u-c-c-t-t), where x, y,
+         and z (0 or 1) specifies the order within each generation; 0 to set in
+         the mass order, while 1 to set in the left-right order. For example,
+         slepton-setting of 133 = 1110 mimics the SLHA1-like convention,
+         where 1000011 (1000013) is left-handed selectron (smuon), 2000011
+         (2000013) is the right-handed selectron (smuon), and 1000015 (2000015)
+         is the lighter (heavier) stau.
+         For sneutrinos, the last three digits have no effect.
+
+  - 141: (SLHA1 only) whether to output lighter-generation Yukawa and A-terms
+       * 0 (default) to remove first and second generation Yukawa and A-terms
+         as in original SLHA1.
+       * 1 to show all three generation. Off-diagonal terms are not included.
+         This is requested by SDECAY.
+
+  - 901: (SLHA2 only) options of soft-mass matrices (MSQ2 etc.)
+  - 902: (SLHA2 only) options of sfermion mixing matrices (USQMIX etc.)
+  - 903: (SLHA2 only) options of Yukawa and T-term matrices (YU, TU, etc.)
+  - 904: (SLHA2 only) options of VCKM and UPMNS matrices.
+       * 0 (default) to display all elements. Whole IM-matrix are displayed,
+         but only if any element is complex.
+       * 1 to remove entries with zero real part and zero imaginary part.
+       * n (>=2) to remove entries whose absolute values (as a complex) are
+         smaller than 10^(-n) .
+"""
 import itertools
 import logging
+import re
 from math import atan, pi, sqrt
-from typing import List, Optional, Tuple, TypeVar, Union
+from typing import List, MutableMapping, Optional, Tuple, TypeVar, Union
 
 import numpy as np
 import numpy.typing
@@ -11,7 +57,7 @@ import simsusy.simsusy
 from simsusy.abs_calculator import AbsCalculator
 from simsusy.mssm.abstract import AbsEWSBParameters, AbsSMParameters
 from simsusy.mssm.input import MSSMInput as Input
-from simsusy.mssm.library import CPV, FLV, A, S
+from simsusy.mssm.library import CPV, FLV, SMIX, A, S
 from simsusy.mssm.model import MSSMModel as Output
 from simsusy.utility import (
     autonne_takagi,
@@ -33,13 +79,26 @@ Matrix = numpy.typing.NDArray[Union[np.float_, np.complex_]]
 logger = logging.getLogger(__name__)
 T = TypeVar("T", RealMatrix, ComplexMatrix)
 
+neutralino_pids = (1000022, 1000023, 1000025, 1000035)
+chargino_pids = (1000024, 1000037)
+
 
 def pow2(v: float) -> float:
+    """Return the square of a number."""
     return v * v
 
 
 class SMParameters(AbsSMParameters):
-    def __init__(self, input):  # type: (Input) -> None
+    """
+    The Standard Model parameters.
+
+    Since this is for tree_calculator, values are calculated at the tree level.
+    The only exception is the W-boson mass; the method `self.mw()` returns the
+    tree-level mass (less than 80 GeV), while `self.mass(24)` returns the pole
+    mass (80.4 GeV).
+    """
+
+    def __init__(self, input: Input) -> None:  # noqa: A003
         super().__init__(input)
 
     """
@@ -51,26 +110,11 @@ class SMParameters(AbsSMParameters):
      gW   == e/Sin[w],
      gY   == e/Cos[w]
     }
-    Note that all the variables are calculated at "Tree Level".
     """
 
     def _sin_sq_cos_sq(self) -> float:
         """Return sin^2(theta_w)*cos^2(theta_w)."""
         return pi / (sqrt(2) * self._alpha_em_inv * self._g_fermi * self._mz * self._mz)
-
-    def sin_w_sq(self) -> float:
-        """Return sin^2(theta_w)."""
-        r = self._sin_sq_cos_sq()
-        return 2 * r / (1 + sqrt(1 - 4 * r))
-
-    def cos_w_sq(self) -> float:
-        """Return cos^2(theta_w)."""
-        r = self._sin_sq_cos_sq()
-        return (1 + sqrt(1 - 4 * r)) / 2
-
-    def mz(self) -> float:
-        """Return the Z-boson mass."""
-        return self._mz
 
     def mw(self) -> float:
         """Return the tree-level W-boson mass."""
@@ -94,9 +138,8 @@ class SMParameters(AbsSMParameters):
         return 2 * self.mz() / sqrt(pow2(self.gy()) + pow2(self.gw()))
 
     def mass(self, pid: int) -> float:
-        """Return the mass of the particle with the given PDG ID."""
-        value = super().mass(pid)
-        if value is not NotImplemented:
+        """Return the pole mass of the specified SM particle."""
+        if (value := super().mass(pid)) is not NotImplemented:
             return value
         elif pid == 1:
             return self._md_2gev
@@ -115,13 +158,42 @@ class SMParameters(AbsSMParameters):
 
 
 class EWSBParameters(AbsEWSBParameters):
-    def __init__(self, input_obj, sm):  # type: (Input, SMParameters) -> None
+    """The EWSB parameters calculated with the tree-level relations."""
+
+    @property
+    def tan_beta(self) -> float:
+        """
+        Return tan_beta.
+
+        As for tree-level calculations, we just ignore the energy scale, i.e.,
+        ignore EXTPAR(25) if MINPAR(3) is specified.
+        """
+        if self._tb_ewsb is not None:
+            return self._tb_ewsb
+        if self._tb_input is not None:
+            return self._tb_input
+        raise ValueError("tan(beta) is not specified.")
+
+    def alpha(self) -> float:
+        """Return the angle between the Higgses."""
+        tan_twobeta, ma, mz = tan2tantwo(self.tan_beta), self.ma0, self.sm.mz()
+        assert ma is not None
+        return 0.5 * atan((pow2(ma) + pow2(mz)) / (ma + mz) / (ma - mz) * tan_twobeta)
+
+    def __init__(self, input_obj: Input, sm: AbsSMParameters) -> None:
         super().__init__(input_obj)
         self.sm = sm
         self.calculate()
         assert self.is_set()
 
     def calculate(self) -> None:
+        """
+        Calculate the EWSB parameters at the tree-level.
+
+        This function may raise ValueError, which should be caught by the
+        caller to store the message in the SPINFO block. AssertionError may be
+        raised, but it should be a bug of calculator, not due to invalid input.
+        """
         for v in (
             self.mh1_sq,
             self.mh2_sq,
@@ -132,11 +204,10 @@ class EWSBParameters(AbsEWSBParameters):
             self.tan_beta,
             self.sign_mu,
         ):
-            if isinstance(v, complex):
+            if v is not None and v.imag:
                 raise ValueError("This calculator does not support CPV.")
 
         # see doc/convention.pdf for equations and discussion.
-        assert isinstance(self.tan_beta, float)
         cos_2beta = tan2costwo(self.tan_beta)
         sin_2beta = tan2sintwo(self.tan_beta)
         mz_sq = pow2(self.sm.mz())
@@ -144,8 +215,8 @@ class EWSBParameters(AbsEWSBParameters):
 
         # first calculate mu if absent.
         if self.mu is None:
-            assert isinstance(self.mh1_sq, float)
-            assert isinstance(self.mh2_sq, float)
+            assert isinstance(self.mh1_sq, (int, float))
+            assert isinstance(self.mh2_sq, (int, float))
             # Martin (8.1.11)
             mu_sq = 0.5 * (
                 -self.mh2_sq
@@ -153,69 +224,58 @@ class EWSBParameters(AbsEWSBParameters):
                 - mz_sq
                 + abs((self.mh1_sq - self.mh2_sq) / cos_2beta)
             )
-            if self.sign_mu is None:
-                raise ValueError("Block MINPAR 4 is required.")
             if mu_sq < 0:
                 raise ValueError("Failed to get EWSB: mu^2 < 0")
             self.mu = self.sign_mu * sqrt(mu_sq)
 
-            # GH (3.22) or Martin (8.1.10)
+            # ma_sq is now ready to set; GH (3.22) or Martin (8.1.10)
             self.ma_sq = self.mh1_sq + self.mh2_sq + 2.0 * mu_sq
             if self.ma_sq < 0:
                 raise ValueError("Failed to get EWSB: mA^2 < 0")
         else:
-            # set mA^2.
+            # set ma_sq
             if self.ma0 is not None:
-                assert isinstance(self.ma0, float)
                 self.ma_sq = pow2(self.ma0)  # at the tree level
             elif self.mhc is not None:
-                assert isinstance(self.mhc, float)
                 self.ma_sq = pow2(self.mhc) - mw_sq  # GH (3.17)
+        assert isinstance(self.mu, (int, float))
+        assert isinstance(self.ma_sq, (int, float))
 
-        # now (mu, ma_sq) are set and (mh1_sq, mh2_sq) may be set.
-        assert isinstance(self.ma_sq, float)
+        # now (mu, ma_sq) are set; mhc and ma0 are ready to set.
         if self.mhc is None:
             self.mhc = sqrt(self.ma_sq + mw_sq)
         if self.ma0 is None:
             self.ma0 = sqrt(self.ma_sq)
-
         # finally calculate h1_sq and mh2_sq if not set.
         if self.mh1_sq is None:
-            assert isinstance(self.mu, float)
             m3_sq = self.ma_sq * sin_2beta / 2
             mu_sq = pow2(self.mu)
             self.mh1_sq = -mu_sq - (mz_sq * cos_2beta / 2) + m3_sq * self.tan_beta
             self.mh2_sq = -mu_sq + (mz_sq * cos_2beta / 2) + m3_sq / self.tan_beta
 
-    def alpha(self) -> float:
-        assert isinstance(self.tan_beta, float)
-        tan_twobeta, ma, mz = tan2tantwo(self.tan_beta), self.ma0, self.sm.mz()
-        assert isinstance(ma, float) and isinstance(mz, float)
-        return 0.5 * atan((pow2(ma) + pow2(mz)) / (ma + mz) / (ma - mz) * tan_twobeta)
-
     def yu(self) -> List[float]:
-        """Return the diagonal of the Yukawa matrix (after super-CKM rotation)."""
-        assert isinstance(self.tan_beta, float)
+        """Return the diagonal of up-type Yukawa after super-CKM rotation."""
         return [
             sqrt(2) * mass / self.sm.vev() / tan2sin(self.tan_beta)
             for mass in self.sm.mass_u()
         ]
 
     def yd(self) -> List[float]:
-        assert isinstance(self.tan_beta, float)
+        """Return the diagonal of down-type Yukawa."""
         return [
             sqrt(2) * mass / self.sm.vev() / tan2cos(self.tan_beta)
             for mass in self.sm.mass_d()
         ]
 
     def ye(self) -> List[float]:
-        assert isinstance(self.tan_beta, float)
+        """Return the diagonal of charged-lepton Yukawa."""
         return [
             sqrt(2) * mass / self.sm.vev() / tan2cos(self.tan_beta)
             for mass in self.sm.mass_e()
         ]
 
     def yukawa(self, species: A) -> List[float]:
+        """Return the diagonal of Yukawa."""
         if species == A.U:
             return self.yu()
         elif species == A.D:
@@ -226,12 +286,25 @@ class EWSBParameters(AbsEWSBParameters):
             raise RuntimeError("invalid call of ewsb.yukawa")
 
     def mass(self, pid: int) -> float:
-        sm_value = self.sm.mass(pid)
-        if isinstance(sm_value, float):
-            return sm_value
-        elif pid == 25 or pid == 35:  # Martin Eq.8.1.20 (see convention.pdf)
+        """
+        Return the pole mass of the specified particle.
+
+        The particles should be SM particle or heavy Higgses.
+        """
+        if (sm_particle_mass := self.sm.mass(pid)) is not NotImplemented:
+            return sm_particle_mass
+
+        if not self.is_set():
+            raise RuntimeError("Invalid mass call before setting EWSB parameters.")
+        assert self.ma0 is not None
+        assert self.mhc is not None
+        assert self.ma_sq is not None
+        if self.ma_sq.imag:
+            raise ValueError("This calculator does not support CPV.")
+
+        if pid == 25 or pid == 35:  # Martin Eq.8.1.20 (see convention.pdf)
             sin_two_beta = tan2sintwo(self.tan_beta)
-            a2, z2 = self.ma_sq, pow2(self.sm.mz())
+            a2, z2 = abs(self.ma_sq), pow2(self.sm.mz())
             factor = -1 if pid == 25 else 1
             return sqrt(
                 (a2 + z2 + factor * sqrt(pow2(a2 - z2) + 4 * z2 * a2 * sin_two_beta))
@@ -246,98 +319,134 @@ class EWSBParameters(AbsEWSBParameters):
 
 
 class Calculator(AbsCalculator):
+    """The tree-level calculator of MSSM."""
+
     name = simsusy.simsusy.__pkgname__ + "/MSSMTree"
     version = simsusy.simsusy.__version__
-    input: Input
 
-    def __init__(self, input: Input) -> None:
-        super().__init__(input=input, logger=logger)
-        self.output = Output()  # type: Output
-        # MODSEL parameters set in load_modsel
-        self.cpv = CPV.NONE  # type: CPV
-        self.flv = FLV.NONE  # type: FLV
+    input: Input  # noqa: A003
+    output: Output
+    cpv: CPV
+    flv: FLV
+
+    document_blocks = [
+        "MODSEL",
+        "MINPAR",
+        "EXTPAR",
+        "VCKMIN",
+        "UPMNSIN",
+        "MSQ2IN",
+        "MSU2IN",
+        "MSD2IN",
+        "MSL2IN",
+        "MSE2IN",
+        "TUIN",
+        "TDIN",
+        "TEIN",
+    ]
+    output_blocks_with_scale = [
+        "HMIX",
+        "GAUGE",
+        "MSOFT",
+        "MSQ2",
+        "MSU2",
+        "MSD2",
+        "MSL2",
+        "MSE2",
+        "AU",
+        "AD",
+        "AE",
+        "TU",
+        "TD",
+        "TE",
+        "YU",
+        "YD",
+        "YE",
+    ]
+
+    def __init__(self, input: Input) -> None:  # noqa: A002
+        super().__init__(logger=logger)
+        self.input = input
+        self.output = Output()
+        self.cpv = CPV.NONE  # MODSEL parameters, set in load_modsel()
+        self.flv = FLV.NONE
+
+    def read_simsusy_options(self, slha1: bool) -> MutableMapping[int, int]:
+        """Validate SIMSUSY block."""
+        both_options = [101]
+        slha1_options = [141]
+        slha2_options = [111, 131, 132, 133, 134, 901, 902, 903, 904]
+        option_keys = both_options + (slha1_options if slha1 else slha2_options)
+        options = {k: 0 for k in option_keys}
+        if self.input.slha.get("SIMSUSY") is None:
+            return options
+        for k, v0 in self.input.slha["SIMSUSY"].items():
+            v = round(v0)
+            if not 100 <= k <= 999:
+                pass  # not calculator-level option
+            elif k not in options:
+                self.add_warning(f"Ignored unknown SIMSUSY option {k}={v}")
+            elif v == 0:
+                pass  # value zero is always allowed and default.
+            elif (
+                (k in (101, 111, 141) and v == 1)
+                or (131 <= k <= 134 and re.match(r"^1[01][01][01]$", str(v)))
+                or (901 <= k <= 904 and v >= 0)
+            ):
+                options[k] = v
+            else:
+                self.add_warning(f"Ignored invalid SIMSUSY option {k}={v}")
+        return options
 
     def write_output(self, filename: Optional[str] = None, slha1: bool = False) -> None:
-        kill_blocks: List[str] = []
-        for block_name in self.output.blocks:
-            if block_name.startswith("IM"):
-                if not (abs(self.output.get_matrix_assert(block_name)).max() > 0):
-                    kill_blocks.append(block_name)
-        for block_name in kill_blocks:
-            del self.output.blocks[block_name]
+        """
+        Output the results to a file.
 
-        if slha1:
-            if self.cpv == CPV.NONE and self.flv == FLV.NONE:
-                self.convert_slha2_to_slha1()
-            else:
-                self.add_warning("SLHA1 does not support CPV/FLV.")
-        else:
-            # It seems that SLHA2 does not allow negative mass for neutralinos.
-            # Then it is better to always provide IMNMIX.
-            neut_masses = [
-                (pid, self.output.mass_assert(pid))
-                for pid in [1000022, 1000023, 1000025, 1000035]
-            ]
-            for i, (pid, mass) in enumerate(neut_masses):
-                for j in range(4):
-                    mix = self.output.get_complex_assert("NMIX", i + 1, j + 1)
-                    if mass < 0:
-                        self.output.set_mass(pid, abs(mass))
-                        mix = mix / 1j
-                    self.output.slha["NMIX", i + 1, j + 1] = mix.real
-                    self.output.slha["IMNMIX", i + 1, j + 1] = mix.imag
-
-        for tmp in [
-            "HMIX",
-            "GAUGE",
-            "MSOFT",
-            "MSQ2",
-            "MSU2",
-            "MSD2",
-            "MSL2",
-            "MSE2",
-            "AU",
-            "AD",
-            "AE",
-            "TU",
-            "TD",
-            "TE",
-            "YU",
-            "YD",
-            "YE",
-        ]:
-            if tmp in self.output.blocks:
-                self.output.blocks[tmp].q = 200  # TODO: more proper way...
-
-        # prepare SPINFO
-        self.output.slha["SPINFO", 3] = list(sorted(set(self._warnings)))
-        self.output.slha["SPINFO", 4] = list(sorted(set(self._errors)))
+        The only options for the `simsusy` script are `slha1` flag and an
+        output path, and thus this method accepts those values. Other output
+        options are specified in SIMSUSY block.
+        """
+        options = self.read_simsusy_options(slha1=slha1)
+        self._output_preparation(slha1, options)
+        self._output_prepare_spinfo()
+        if options[101]:
+            self.output.slha["SPINFO", 3] = []
 
         # dumper configuration
         self.output.dumper = yaslha.dumper.SLHADumper(
             separate_blocks=True,
             comments_preserve=yaslha.dumper.CommentsPreserve.TAIL,
-            document_blocks=[
-                "MODSEL",
-                "MINPAR",
-                "EXTPAR",
-                "VCKMIN",
-                "UPMNSIN",
-                "MSQ2IN",
-                "MSU2IN",
-                "MSD2IN",
-                "MSL2IN",
-                "MSE2IN",
-                "TUIN",
-                "TDIN",
-                "TEIN",
-            ],
+            document_blocks=self.document_blocks,
         )
         self.output.write(filename)
 
+    def _output_preparation(self, slha1, options):
+        # type: (bool, MutableMapping[int, int]) -> None
+        if slha1 and (self.cpv != CPV.NONE or self.flv != FLV.NONE):
+            self.add_error("SLHA1 does not support CPV/FLV.")
+            return
+        if slha1:
+            self._output_prepare_spinfo()
+            self._output_reorder_sfermions(slha1=True, options=options)
+            self._output_convert_slha2_to_slha1(options)
+            self._output_remove_void_blocks()
+        else:
+            if options[111] == 0:
+                self._output_rearrange_neutralino_negative_mass()
+            self._output_reorder_sfermions(slha1=False, options=options)
+            self._output_remove_void_blocks()
+            self._output_suppress_small_matrix_entries(options)
+
+        for tmp in self.output_blocks_with_scale:
+            if tmp in self.output.blocks:
+                self.output.blocks[tmp].q = 200  # TODO: more proper way...
+
     def _load_modsel(self) -> None:
         modsel = self.input.block("MODSEL")
-        assert isinstance(modsel, yaslha.slha.Block)
+        if not isinstance(modsel, yaslha.slha.Block):
+            # MODSEL can be absent.
+            return
+
         for k, v in modsel.items():
             if k == 1:
                 if v not in (0, 1):
@@ -374,10 +483,13 @@ class Calculator(AbsCalculator):
         self.output.sm = SMParameters(self.input)
 
     def _load_ewsb_parameters(self) -> None:
-        if self.input.get_complex("MINPAR", 3) and self.input.get_complex("EXTPAR", 25):
+        if (
+            self.input.get_complex("MINPAR", 3, default=None) is not None
+            and self.input.get_complex("EXTPAR", 25, default=None) is not None
+        ):
             self.add_warning("TB in MINPAR ignored due to EXTPAR 25.")
         try:
-            assert isinstance(self.output.sm, SMParameters)
+            assert self.output.sm
             self.output.ewsb = EWSBParameters(self.input, self.output.sm)
         except ValueError as e:
             self.add_error(f"invalid EWSB spec ({e})")
@@ -482,6 +594,7 @@ class Calculator(AbsCalculator):
                 self.input.remove_block("UPMNSIN")
 
     def calculate(self) -> None:
+        """Calculate the MSSM parameters."""
         self.output.input = self.input
         self._load_modsel()
         self._load_sminputs()
@@ -507,14 +620,9 @@ class Calculator(AbsCalculator):
         self.output.slha["SPINFO", 4] = []
 
     def _prepare_sm_ewsb(self) -> None:
-        assert self.output.sm is not None
-        assert self.output.ewsb is not None
+        assert self.output.sm
+        assert self.output.ewsb
 
-        assert isinstance(self.output.ewsb.mu, float)
-        assert isinstance(self.output.ewsb.tan_beta, float)
-        assert isinstance(self.output.ewsb.ma_sq, float)
-
-        # isinstance(self.ewsb, EWSBParameters)
         for pid in [5, 6, 15, 23, 24]:
             self.output.set_mass(pid, self.output.sm.mass(pid))
         self.output.slha["ALPHA", None] = self.output.ewsb.alpha()
@@ -527,7 +635,7 @@ class Calculator(AbsCalculator):
         self.output.slha["GAUGE", 3] = self.output.sm.gs()
 
     def _calculate_softmasses(self) -> None:
-        assert isinstance(self.output.ewsb, EWSBParameters)
+        assert self.output.ewsb
         for i in [1, 2, 3]:
             self.output.slha["MSOFT", i] = self.input.mg(i)
         self.output.slha["MSOFT", 21] = self.output.ewsb.mh1_sq
@@ -554,24 +662,24 @@ class Calculator(AbsCalculator):
             self.output.set_matrix(s_type.slha2_output, self.input.ms2(s_type).real)
 
     def _calculate_higgses(self) -> None:
-        assert isinstance(self.output.ewsb, EWSBParameters)
+        assert self.output.ewsb
         for pid in [25, 35, 36, 37]:
             self.output.set_mass(pid, self.output.ewsb.mass(pid))
 
     def _neutralino_matrix(self) -> RealMatrix:
         """Return the neutralino mass matrix, ignoring CPV."""
-        assert isinstance(self.output.sm, SMParameters)
-        assert isinstance(self.output.ewsb, EWSBParameters)
+        assert self.output.sm
+        assert self.output.ewsb
         # CPV ignored
         cb = tan2cos(self.output.ewsb.tan_beta.real)
         sb = tan2sin(self.output.ewsb.tan_beta.real)
         sw = sqrt(self.output.sm.sin_w_sq())
         cw = sin2cos(sw)
         mz = self.output.sm.mz()
-        m1 = self.output.get_float_assert("MSOFT", 1)
-        m2 = self.output.get_float_assert("MSOFT", 2)
+        m1 = self.output.get_float("MSOFT", 1)
+        m2 = self.output.get_float("MSOFT", 2)
         mu = self.output.ewsb.mu
-        assert mu
+        assert mu is not None
         # Since CPV is not supported, m_psi0 is real and nmix will be real.
         return np.array(
             [
@@ -584,17 +692,14 @@ class Calculator(AbsCalculator):
 
     def _calculate_neutralino(self) -> None:
         masses, nmix = autonne_takagi(self._neutralino_matrix(), try_real_mixing=True)
-        self.output.set_mass(1000022, masses[0])
-        self.output.set_mass(1000023, masses[1])
-        self.output.set_mass(1000025, masses[2])
-        self.output.set_mass(1000035, masses[3])
+        for i, pid in enumerate(neutralino_pids):
+            self.output.set_mass(pid, masses[i])
         assert is_real_matrix(nmix)
         self.output.set_matrix("NMIX", nmix.real)
 
     def _calculate_chargino(self) -> None:
-        assert isinstance(self.output.sm, SMParameters)
-        assert isinstance(self.output.ewsb, EWSBParameters)
-        assert isinstance(self.output.ewsb.tan_beta, float)
+        assert self.output.sm
+        assert self.output.ewsb
         cb = tan2cos(self.output.ewsb.tan_beta)
         sb = tan2sin(self.output.ewsb.tan_beta)
         sqrt2_mw = sqrt(2) * self.output.sm.mass(24)  # use pole value
@@ -603,34 +708,30 @@ class Calculator(AbsCalculator):
 
         m_psi_plus = np.array([[m2, sqrt2_mw * sb], [sqrt2_mw * cb, mu]])  # SLHA (22)
         masses, umix, vmix = singular_value_decomposition(m_psi_plus)
-        self.output.set_mass(1000024, masses[0])
-        self.output.set_mass(1000037, masses[1])
+        for i, pid in enumerate(chargino_pids):
+            self.output.set_mass(pid, masses[i])
         assert is_real_matrix(umix)
         assert is_real_matrix(vmix)
         self.output.set_matrix("UMIX", umix.real)
         self.output.set_matrix("VMIX", vmix.real)
 
     def _calculate_gluino(self) -> None:
-        self.output.set_mass(1000021, self.output.get_float_assert("MSOFT", 3))
+        self.output.set_mass(1000021, self.output.get_float("MSOFT", 3))
 
     def _calculate_sfermion(self) -> None:
-        assert isinstance(self.output.sm, SMParameters)
-        assert isinstance(self.output.ewsb, EWSBParameters)
-        assert isinstance(self.output.ewsb.tan_beta, float)
+        assert self.output.sm
+        assert self.output.ewsb
         mu = self.output.ewsb.mu
         tan_beta = self.output.ewsb.tan_beta
-        assert mu
-        assert isinstance(tan_beta, float)
+        assert mu is not None
         mz2_cos2b = (
-            np.diag([1, 1, 1])
-            * pow2(self.output.sm.mz())
-            * tan2costwo(self.output.ewsb.tan_beta)
+            np.diag([1, 1, 1]) * pow2(self.output.sm.mz()) * tan2costwo(tan_beta)
         )
         sw2 = self.output.sm.sin_w_sq()
-        mu_tan_b = mu * self.output.ewsb.tan_beta
-        mu_cot_b = mu / self.output.ewsb.tan_beta
-        ckm = self.output.get_matrix_assert("VCKM", default=np.diag([1, 1, 1]))
-        pmns = self.output.get_matrix_assert("UPMNS", default=np.diag([1, 1, 1]))
+        mu_tan_b = mu * tan_beta
+        mu_cot_b = mu / tan_beta
+        ckm = self.output.get_matrix("VCKM", default=np.diag([1, 1, 1]))
+        pmns = self.output.get_matrix("UPMNS", default=np.diag([1, 1, 1]))
 
         def dag(m: T) -> T:
             return np.conjugate(m.T)
@@ -639,11 +740,11 @@ class Calculator(AbsCalculator):
             return np.vstack([np.hstack([m11, m12]), np.hstack([m21, m22])])
 
         def mass_matrix(right: S) -> RealMatrix:
-            assert self.output.sm and self.output.ewsb
+            assert self.output.sm
+            assert self.output.ewsb
             mu = self.output.ewsb.mu
             tan_beta = self.output.ewsb.tan_beta
-            assert isinstance(mu, float)
-            assert isinstance(tan_beta, float)
+            assert mu is not None
             if right == S.UR:
                 (left, a_species, mf) = (S.QL, A.U, self.output.sm.mass_u())
                 dl, dr, mu = (1 / 2 - 2 / 3 * sw2), 2 / 3 * sw2, mu_cot_b
@@ -658,12 +759,12 @@ class Calculator(AbsCalculator):
                 vev = self.output.sm.vev() * tan2cos(tan_beta)
             else:
                 raise NotImplementedError
-            msl2 = self.output.get_matrix_assert(left.slha2_output)
+            msl2 = self.output.get_matrix(left.slha2_output)
             if right == S.UR:
                 msl2 = ckm @ msl2 @ dag(ckm)
-            msr2 = self.output.get_matrix_assert(right.slha2_output)
+            msr2 = self.output.get_matrix(right.slha2_output)
             mf_mat = np.diag(mf)
-            t = self.output.get_matrix_assert(a_species.out_t)
+            t = self.output.get_matrix(a_species.out_t)
 
             # SLHA Eq.23-25 and SUSY Primer (8.4.18)
             return m_join(
@@ -675,7 +776,7 @@ class Calculator(AbsCalculator):
 
         def sneutrino_mass() -> ComplexMatrix:
             assert self.output.sm
-            msl2 = self.output.get_matrix_assert(S.LL.slha2_output)
+            msl2 = self.output.get_matrix(S.LL.slha2_output)
             mf_sq: RealMatrix = np.diag([v * v for v in self.output.sm.mass_n()])
             dl = 1 / 2
             return pmns @ msl2 @ dag(pmns) + mf_sq + dl * mz2_cos2b
@@ -689,120 +790,86 @@ class Calculator(AbsCalculator):
                         m[i, j] = 0
             return m
 
-        for (right, pid, mix_name) in (
-            (S.UR, 1, "USQMIX"),
-            (S.DR, 0, "DSQMIX"),
-            (S.ER, 10, "SELMIX"),
-        ):
+        for (right, mix) in [(S.UR, SMIX.U), (S.DR, SMIX.D), (S.ER, SMIX.L)]:
             mass_sq, f = mass_diagonalization(mass_matrix(right))
-            self.output.set_mass(1000001 + pid, sqrt(mass_sq[0]))
-            self.output.set_mass(1000003 + pid, sqrt(mass_sq[1]))
-            self.output.set_mass(1000005 + pid, sqrt(mass_sq[2]))
-            self.output.set_mass(2000001 + pid, sqrt(mass_sq[3]))
-            self.output.set_mass(2000003 + pid, sqrt(mass_sq[4]))
-            self.output.set_mass(2000005 + pid, sqrt(mass_sq[5]))
+            for i, pid in enumerate(mix.pids):
+                self.output.set_mass(pid, sqrt(mass_sq[i]))
             assert is_real_matrix(f)
-            self.output.set_matrix(mix_name, prettify_matrix(f.real))
+            self.output.set_matrix(mix.slha2mix, prettify_matrix(f.real))
 
         mass_sq, f = mass_diagonalization(sneutrino_mass())
-        self.output.set_mass(1000012, sqrt(mass_sq[0]))
-        self.output.set_mass(1000014, sqrt(mass_sq[1]))
-        self.output.set_mass(1000016, sqrt(mass_sq[2]))
+        for i, pid in enumerate(SMIX.N.pids):
+            self.output.set_mass(pid, sqrt(mass_sq[i]))
         assert is_real_matrix(f)
-        self.output.set_matrix("SNUMIX", prettify_matrix(f.real))
+        self.output.set_matrix(SMIX.N.slha2mix, prettify_matrix(f.real))
 
-    def convert_slha2_to_slha1(self) -> None:
-        if not (self.cpv == CPV.NONE and self.flv == FLV.NONE):
-            self.add_error("SLHA1 does not support Flavor/CP violations.")
-            return
-        # soft masses
-        for s_type in S:
-            for gen in (1, 2, 3):
-                self.output.slha["MSOFT", s_type.extpar + gen] = sqrt(
-                    self.output.get_float_assert(s_type.slha2_output, (gen, gen))
-                )
-            self.output.remove_block(s_type.slha2_output)
+    def _output_remove_void_blocks(self) -> None:
+        """Remove blocks without items and IM-blocks with no non-zero entry."""
+        kill_blocks: List[str] = []
+        for name in self.output.blocks:
+            block = self.output.slha[name]
+            if len([block.keys()]) == 0:
+                kill_blocks.append(name)
+            elif name.startswith("IM"):
+                to_kill = True
+                for _, value in block.items():
+                    if abs(value) > 0:
+                        to_kill = False
+                        break
+                if to_kill:
+                    kill_blocks.append(name)
+        for block_name in kill_blocks:
+            del self.output.blocks[block_name]
 
-        # A-terms and Yukawas
-        #     SLHA1 allows only (3,3) element but SDecay assumes (1,1) and (2,2) exist.
-        #     Hope that other programs does not complain it...
-        # for t_type in A:
-        #     a33 = self.output.get_float_assert(
-        #         t_type.out_t, (3, 3)
-        #     ) / self.output.get_float_assert(t_type.out_y, (3, 3))
-        #     self.output.slha[t_type.out_a, 3, 3] = a33
-        #     self.output.remove_block(t_type.out_t)
-        #     for i in (1, 2):
-        #         self.output.remove_value(t_type.out_y, (i, i))
-        for t_type in A:
-            for i in (1, 2, 3):
-                self.output.slha[t_type.out_a, i, i] = self.output.get_float_assert(
-                    t_type.out_t, (i, i)
-                ) / self.output.get_float_assert(t_type.out_y, (i, i))
-            self.output.remove_block(t_type.out_t)
+    def _output_rearrange_neutralino_negative_mass(self) -> None:
+        """
+        Handle negative values of neutralino masses.
 
-        # mass and mixing: quark flavor rotation is reverted.
-        pid_base = [1000001, 1000003, 1000005, 2000001, 2000003, 2000005]
-        self._reorder_mixing_matrix_in_flavor(
-            "USQMIX", [pid + 1 for pid in pid_base], lighter_gen_in_lr=True
-        )
-        self._reorder_mixing_matrix_in_flavor(
-            "DSQMIX", pid_base, lighter_gen_in_lr=True
-        )
-        self._reorder_mixing_matrix_in_flavor(
-            "SELMIX", [pid + 10 for pid in pid_base], lighter_gen_in_lr=True
-        )
-        self._reorder_mixing_matrix_in_flavor("SNUMIX", [1000012, 1000014, 1000016])
+        Since this calculator does not handle CPV, _calculate_neutralino
+        asserts NMIX is a real matrix. If SLHA2 output is requested (and the
+        option 111 is not set to 1), we rotate the NMIX to be complex and force
+        the mass to be positive (SLHA2 default).
+        """
+        # let neutralino-mass positive with imaginary NMIX.
+        for i, pid in enumerate(neutralino_pids):
+            mass = self.output.mass(pid)
+            for j in range(4):
+                old_mix = self.output.get_complex("NMIX", i + 1, j + 1)
+                new_mix = old_mix * (1j if mass < 0 else 1)
+                self.output.slha["NMIX", i + 1, j + 1] = new_mix.real
+                self.output.slha["IMNMIX", i + 1, j + 1] = new_mix.imag
+            if mass < 0:
+               self.output.set_mass(pid, abs(mass))
 
-        for slha2, slha1 in (
-            ("USQMIX", "STOPMIX"),
-            ("DSQMIX", "SBOTMIX"),
-            ("SELMIX", "STAUMIX"),
-        ):
-            self._kill_lighter_gen_mixing(slha2)
-            r = self.output.get_matrix_assert(slha2)
-            self.output.slha[slha1, 1, 1] = r[2][2]
-            self.output.slha[slha1, 1, 2] = r[2][5]
-            self.output.slha[slha1, 2, 1] = r[5][2]
-            self.output.slha[slha1, 2, 2] = r[5][5]
-            self.output.remove_block(slha2)
+    def _output_reorder_sfermions(self, slha1, options):
+        # type: (bool, MutableMapping[int, int]) -> None
+        """Reorder sfermion blocks according to SIMSUSY options."""
+        targets = [  # mixing matrix and SIMSUSY option key
+            (SMIX.D, 131),
+            (SMIX.U, 132),
+            (SMIX.L, 133),
+            (SMIX.N, 134),
+        ]
+        for (smix, option_key) in targets:
+            if slha1:
+                self._output_reorder_sfermion_in_flavor(smix, (1, 1, 0))
+            elif (option := options[option_key]) == 0:
+                # SLHA2 default
+                self._output_reorder_sfermion_in_mass(smix)
+            else:
+                order = (option % 1000 // 100, option % 100 // 10, option % 10)
+                self._output_reorder_sfermion_in_flavor(smix, order)
 
-        assert is_diagonal_matrix(self.output.get_matrix("SNUMIX"))
-        self.output.remove_block("SNUMIX")
-
-        # remove SLHA2 blocks
-        for block_name in ("VCKM", "IMVCKM", "UPMNS", "IMUPMNS"):
-            self.output.remove_block(block_name)
-
-    def __reorder_mixing_matrix(self, name, old_pids, order):
-        # type: (str, List[int], List[int])->None
-        n = len(order)
-        assert len(old_pids) == n and sorted(order) == list(range(n))
-        mixing = self.output.get_complex_matrix_assert(name)
-        masses: List[float] = [self.output.mass(p) for p in old_pids]  # type: ignore
-        assert None not in masses
-
-        imaginary = "IM" + name in self.output.slha.blocks
-        for i, x in enumerate(order):
-            self.output.set_mass(old_pids[i], masses[x])
-            for j in range(n):
-                self.output.slha[name, i + 1, j + 1] = mixing[x, j].real
-                if imaginary:
-                    self.output.slha["IM" + name, i + 1, j + 1] = mixing[x, j].imag
-        del self.output._matrix_cache[name]
-        if imaginary:
-            del self.output._matrix_cache["IM" + name]
-
-    def _get_mixing_order_mass(self, name, pids):
-        # type: (str, List[int])->List[int]
-        masses = [(i, self.output.mass(p)) for i, p in enumerate(pids)]
+    def _output_reorder_sfermion_in_mass(self, smix: SMIX) -> None:
+        masses = [(i, self.output.mass(p)) for i, p in enumerate(smix.pids)]
         masses.sort(key=lambda x: abs(x[1]) if x[1] else 0)
-        return [i for i, _ in masses]
+        order = [i for i, _ in masses]
+        self.__reorder_sfermions(smix, order)
 
-    def _get_mixing_order_flavor(self, name, pids, order_by_lr=(True, True, True)):
-        # type: (str, List[int], Tuple[bool, bool, bool])->List[int]
-        mixing = self.output.get_complex_matrix(name)
-        assert (n := len(pids)) in [3, 6]
+    def _output_reorder_sfermion_in_flavor(self, smix, order_by_lr_flags):
+        # type: (SMIX, Tuple[int, int, int]) -> None
+        mixing = self.output.get_complex_matrix(smix.slha2mix)
+        assert (n := len(smix.pids)) in [3, 6]
         assert isinstance(mixing, np.ndarray)
         assert len(mixing.shape) == 2 and mixing.shape[0] == mixing.shape[1] == n
         m = mixing.copy()
@@ -824,97 +891,107 @@ class Calculator(AbsCalculator):
         # then, if not order_by_lr for i-th generation, reorder in their masses.
         if n == 6:
             for i in range(3):
-                if not order_by_lr[i]:
+                if not order_by_lr_flags[i]:
                     il, ir = order[i], order[i + 3]
-                    ml, mr = self.output.mass(pids[il]), self.output.mass(pids[ir])
-                    assert ml and mr
+                    ml = self.output.mass(smix.pids[il])
+                    mr = self.output.mass(smix.pids[ir])
                     if mr < ml:
                         order[i], order[i + 3] = ir, il
-        return order
+        self.__reorder_sfermions(smix, order)
 
-    def _reorder_mixing_matrix_in_flavor(self, name, pids, lighter_gen_in_lr=False):
-        # type: (str, List[int],bool) -> None
-        """Reorder sfermion mixing matrix in flavor order.
+    def __reorder_sfermions(self, smix: SMIX, order: List[int]) -> None:
+        n = len(order)
+        assert len(smix.pids) == n and sorted(order) == list(range(n))
+        mixing = self.output.get_complex_matrix(smix.slha2mix)
+        masses: List[float] = [self.output.mass(p) for p in smix.pids]
 
-        Parameters
-        ----------
-        *matrix_name: str
-            The block name of the matrix to be reordered.
-        *pids: List[int]
-            The list of PDG IDs of the particles corresponding to the matrix.
-        *lighter_gen_in_lr: bool
-            Noting that the 3rd generation particles are always ordered in their masses,
-            this flag determines if the treatment is also applied to the lighter ones.
-            If `False` (default), they are ordered in mass.
-            If `True`, they are ordered by "LR" order, as in the SLHA1 convention.
-        """
-        lr_reorder = (lighter_gen_in_lr, lighter_gen_in_lr, False)
-        order = self._get_mixing_order_flavor(name, pids, lr_reorder)
-        self.__reorder_mixing_matrix(name, pids, order)
+        im_matrix = "IM" + smix.slha2mix
+        is_complex = im_matrix in self.output.blocks
+        for i, x in enumerate(order):
+            self.output.set_mass(smix.pids[i], masses[x])
+            for j in range(n):
+                self.output.slha[smix.slha2mix, i + 1, j + 1] = mixing[x, j].real
+                if is_complex:
+                    self.output.slha[im_matrix, i + 1, j + 1] = mixing[x, j].imag
 
-    def _chop_mixing_matrix(self, name, threshold=1e-10):
-        # type: (str, float) -> None
-        """Chop the mixing matrix to remove the small elements.
+    def _output_convert_slha2_to_slha1(self, options: MutableMapping[int, int]) -> None:
+        # soft masses
+        for s_type in S:
+            for gen in (1, 2, 3):
+                self.output.slha["MSOFT", s_type.extpar + gen] = sqrt(
+                    self.output.get_float(s_type.slha2_output, gen, gen)
+                )
+            self.output.remove_block(s_type.slha2_output)
 
-        The key component of each row and each column are not chopped.
+        for t_type in A:
+            for i in (1, 2, 3):
+                if options[141] == 0 and i != 3:
+                    continue
+                self.output.slha[t_type.out_a, i, i] = self.output.get_float(
+                    t_type.out_t, i, i
+                ) / self.output.get_float(t_type.out_y, i, i)
+            self.output.remove_block(t_type.out_t)
 
-        ----------
-        *matrix_name: str
-            The block name of the matrix to be chopped.
-        *threshold: float
-            The criterion to chop. It can be any large, but 1/sqrt(2) is the meaningful
-            maximum.
-        """
-        self.__chop_mixing_matrix(name, threshold, False, False)
+        # mass and mixing: quark flavor rotation is already flavor-ordered.
+        for smix in [SMIX.D, SMIX.U, SMIX.L]:
+            r = self.output.get_matrix(smix.slha2mix)
+            max_mix = (-1, -1, 0)
+            for i in range(6):
+                for j in range(6):
+                    if i == j or (i in (2, 5) and j in (2, 5)):
+                        pass
+                    elif (v := abs(r[i, j])) > max_mix[2]:
+                        max_mix = (i + 1, j + 1, v)
+            if max_mix[2] > 0:
+                self.add_warning(
+                    "Ignored lighter-gen {} (max:{}{} = {:.2e})".format(
+                        smix.slha2mix, *max_mix
+                    )
+                )
 
-    def _kill_lighter_gen_mixing(self, name):
-        # type: (str) -> None
-        """Kill the off-diagonal mixing elements except for (3,6) and (6,3) entries.
+            self.output.slha[smix.slha1mix, 1, 1] = r[2][2]
+            self.output.slha[smix.slha1mix, 1, 2] = r[2][5]
+            self.output.slha[smix.slha1mix, 2, 1] = r[5][2]
+            self.output.slha[smix.slha1mix, 2, 2] = r[5][5]
+            self.output.remove_block(smix.slha2mix)
 
-        ----------
-        *matrix_name: str
-            The block name of the matrix to be chopped.
-        """
-        self.__chop_mixing_matrix(name, 1, True, True)
+        assert is_diagonal_matrix(self.output.get_matrix("SNUMIX"))
+        self.output.remove_block("SNUMIX")
 
-    def __chop_mixing_matrix(self, name, threshold, keep_third_gen, add_warnings):
-        # type: (str, float, bool, bool) -> None
-        """Chop small value, but also used to kill the lighter-gen mixings."""
+        # remove SLHA2 blocks
+        for block_name in ("VCKM", "IMVCKM", "UPMNS", "IMUPMNS"):
+            self.output.remove_block(block_name)
 
-        mixing = self.output.get_complex_matrix_assert(name)
-        abs_mix = abs(mixing)
-        is_modified = {i: False for i in range(len(mixing))}
-        chopped_max = (-1.0, 0, 0)
+    def _output_suppress_small_matrix_entries(self, options):
+        # type: (MutableMapping[int, int]) -> None
+        """Remove small matrix elements according to the options."""
 
-        for (i, j), x in np.ndenumerate(mixing):
-            if not (abs_x := abs(x)):
-                continue
-            if (  # small, not 3rd-gen, and not key.
-                abs_x < threshold
-                and not (keep_third_gen and i in [2, 5] and j in [2, 5])
-                and (abs_mix[i].argmax() != j and abs_mix.argmax(axis=0)[j] != i)
-            ):
-                mixing[(i, j)] = 0
-                is_modified[i] = True
-                if abs_x > chopped_max[0]:
-                    chopped_max = (float(abs_x), i, j)
-            elif x.real and (r := abs(x.imag / x.real)) > 0:
-                if r < threshold:
-                    mixing[(i, j)] = x.real
-                    is_modified[i] = True
-                elif r > 1 / threshold:
-                    mixing[(i, j)] = x.imag * 1j
-                    is_modified[i] = True
-        # keep unitarity at least in each row
-        for i, row in enumerate(mixing):
-            if is_modified[i]:
-                norm = sqrt(sum(pow2(abs(r)) for r in row))
-                for j, elem in enumerate(row):
-                    mixing[i, j] = elem / norm
-        if any(is_modified.values()):
-            self.output.set_complex_matrix(name, mixing)
-        if chopped_max[0] > 0 and add_warnings:
-            self.add_warning(
-                f"Ignored {name} mixing (max={chopped_max[0]:.4f} "
-                f"in {chopped_max[1]+1},{chopped_max[2]+1})"
-            )
+        def remove(names: List[str], option_key: int) -> None:
+            if (option := options[option_key]) == 0:
+                return
+            threshold_squared = None if option == 1 else pow(0.1, option * 2)
+            for name in names:
+                rb, ib = self.output.block(name), self.output.block("IM" + name)
+                if isinstance(rb, yaslha.block.InfoBlock) or isinstance(
+                    ib, yaslha.block.InfoBlock
+                ):
+                    continue
+                re_keys = set(rb.keys()) if rb else set()
+                im_keys = set(ib.keys()) if ib else set()
+                for k in re_keys | im_keys:
+                    r = rb.get(k, default=None) if rb else None
+                    i = ib.get(k, default=None) if ib else None
+                    if threshold_squared is None:
+                        to_remove = (not r) and (not i)
+                    else:
+                        value = pow2(r if r else 0) + pow2(i if i else 0)
+                        to_remove = value < threshold_squared
+                    if to_remove and rb and r is not None:
+                        del rb[k]
+                    if to_remove and ib and i is not None:
+                        del ib[k]
+
+        remove(["MSQ2", "MSU2", "MSD2", "MSL2", "MSE2"], 901)
+        remove(["USQMIX", "DSQMIX", "SELMIX", "SNUMIX"], 902)
+        remove(["YU", "YD", "YE", "TU", "TD", "TE"], 903)
+        remove(["VCKM", "UPMNS"], 904)
