@@ -7,7 +7,7 @@ Tree-level MSSM calculator for MadGraph5 MSSM_SLHA2 model.
 """
 
 import logging
-from typing import Any, Tuple, Optional, MutableMapping
+from typing import Any, MutableMapping, Optional, Tuple
 
 import yaslha
 
@@ -26,7 +26,7 @@ class Calculator(simsusy.mssm.tree_calculator.Calculator):
     name = simsusy.simsusy.__pkgname__ + "/MSSMMG5Tree"
     version = simsusy.simsusy.__version__
 
-    def __init__(self, input: Input) -> None:
+    def __init__(self, input: Input) -> None:  # noqa: A002
         super().__init__(input=input)
 
     def write_output(self, filename: Optional[str] = None, slha1: bool = False) -> None:

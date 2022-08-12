@@ -98,7 +98,7 @@ class SMParameters(AbsSMParameters):
     mass (80.4 GeV).
     """
 
-    def __init__(self, input: Input) -> None:  # noqa: A003
+    def __init__(self, input: Input) -> None:  # noqa: A002
         super().__init__(input)
 
     """
@@ -839,7 +839,7 @@ class Calculator(AbsCalculator):
                 self.output.slha["NMIX", i + 1, j + 1] = new_mix.real
                 self.output.slha["IMNMIX", i + 1, j + 1] = new_mix.imag
             if mass < 0:
-               self.output.set_mass(pid, abs(mass))
+                self.output.set_mass(pid, abs(mass))
 
     def _output_reorder_sfermions(self, slha1, options):
         # type: (bool, MutableMapping[int, int]) -> None
@@ -945,7 +945,8 @@ class Calculator(AbsCalculator):
             if max_mix[2] > 0:
                 self.add_warning(
                     "Ignored lighter-gen {} (max:{}{} = {:.2e})".format(
-                        smix.slha2mix, *max_mix
+                        smix.slha2mix,
+                        *max_mix,
                     )
                 )
 

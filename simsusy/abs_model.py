@@ -10,7 +10,6 @@ matrices are cached, but this feature is removed to simplify the codes.
 
 import logging
 import pathlib
-from multiprocessing.sharedctypes import Value
 from typing import (  # noqa: F401
     Any,
     Dict,

@@ -1,3 +1,4 @@
+"""Model for MSSM calculator input."""
 import logging
 import math
 from typing import Any, Optional, TypeVar, Union, overload
@@ -18,6 +19,8 @@ logger = logging.getLogger(__name__)
 
 
 class MSSMInput(AbsModel):
+    """The model representing input SLHA for MSSM."""
+
     def __init__(self, *args: Any) -> None:
         super().__init__(*args)
         self.slha1_compatible = not (
@@ -99,7 +102,8 @@ class MSSMInput(AbsModel):
         raise ValueError(f"Gaugino mass {key} is unset.")
 
     def ms2(self, species: S) -> Matrix:
-        """Return scalar mass-squared matrix.
+        """
+        Return scalar mass-squared matrix.
 
         MSx2IN-value, EXTPAR-value, and MINPAR-value are used in this order.
         """
@@ -125,10 +129,11 @@ class MSSMInput(AbsModel):
         return result
 
     def a(self, species: A) -> Optional[Matrix]:
-        """Return A-term matrix.
+        """
+        Return A-term matrix.
 
-        If T-matrix is specified, None is returned. Note that only (3, 3)-element can
-        be specified.
+        If T-matrix is specified, None is returned. Note that only (3,
+        3)-element can be specified.
         """
         blocks = self.slha.blocks
         if species.slha2_input in blocks or "IM" + species.slha2_input in blocks:
@@ -137,10 +142,11 @@ class MSSMInput(AbsModel):
         return np.diag([0, 0, a33])
 
     def t(self, species: A) -> Optional[Matrix]:
-        """Return T-term matrix if T-matrix is specified.
+        """
+        Return T-term matrix if T-matrix is specified.
 
-        Corresponding EXTPAR entry is ignored and thus (3,3) element must always be
-        specified.
+        Corresponding EXTPAR entry is ignored and thus (3,3) element must
+        always be specified.
         """
         matrix = self.get_complex_matrix(species.slha2_input, default=None)
         if matrix is None:
@@ -150,6 +156,7 @@ class MSSMInput(AbsModel):
         return matrix
 
     def vckm(self) -> Matrix:
+        """Return CKM matrix constructed from input."""
         lam = self.get_float("VCKMIN", 1, default=0)
         a = self.get_float("VCKMIN", 2, default=0)
         rho_bar = self.get_float("VCKMIN", 3, default=0)
@@ -179,7 +186,8 @@ class MSSMInput(AbsModel):
         )
 
     def upmns(self) -> ComplexMatrix:
-        """Return UPMNS matrix.
+        """
+        Return UPMNS matrix.
 
         NOTE: SLHA2 convention uses theta-bars, while PDG2006 has only thetas.
               The difference should be ignored as it seems denoting MS-bar scheme.()

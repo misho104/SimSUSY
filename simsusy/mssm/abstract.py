@@ -4,7 +4,7 @@ import json
 import logging
 import math
 import pathlib
-from typing import TYPE_CHECKING, List, Optional
+from typing import List, Optional
 
 import simsusy.mssm.library
 from simsusy.mssm.input import MSSMInput
