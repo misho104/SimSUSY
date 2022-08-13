@@ -925,11 +925,12 @@ class Calculator(AbsCalculator):
 
         for t_type in A:
             for i in (1, 2, 3):
-                if options[141] == 0 and i != 3:
-                    continue
-                self.output.slha[t_type.out_a, i, i] = self.output.get_float(
-                    t_type.out_t, i, i
-                ) / self.output.get_float(t_type.out_y, i, i)
+                if options[141] == 1 or i == 3:
+                    t = self.output.get_float(t_type.out_t, i, i)
+                    y = self.output.get_float(t_type.out_y, i, i)
+                    self.output.slha[t_type.out_a, i, i] = t / y
+                else:
+                    del self.output.slha[t_type.out_y, i, i]
             self.output.remove_block(t_type.out_t)
 
         # mass and mixing: quark flavor rotation is already flavor-ordered.
