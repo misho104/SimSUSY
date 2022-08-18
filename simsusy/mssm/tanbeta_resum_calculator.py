@@ -1,4 +1,4 @@
-"""MSSM tree-level calculator with tan-beta resummation."""
+"""MSSM tree-level calculator with tan-beta resummation for sleptons."""
 
 
 import logging
@@ -7,11 +7,11 @@ from typing import Optional, Tuple, TypeVar, Union
 
 import numpy as np
 import numpy.typing
-import yaslha
 
 import simsusy.mssm.tree_calculator
 import simsusy.simsusy
 from simsusy.mssm.input import MSSMInput as Input  # noqa: F401
+from simsusy.mssm.library import SMIX
 from simsusy.mssm.model import MSSMModel as Output  # noqa: F401
 from simsusy.utility import (
     autonne_takagi,
@@ -34,16 +34,15 @@ def pow2(x: float) -> float:
 
 
 class SleptonProperty:
-    """Slepton property in flavor order."""
+    """
+    Slepton property in flavor order.
+
+    The i-th row of mixing corresponds to the particle with i-th mass, while
+    the first (second) column corresponds to slep_L (slep_R).
+    """
 
     def __init__(self, mass, snu, mixing):
-        # type: (Tuple[float, float], float, ComplexMatrix) -> None
-        """Initialize.
-
-        The i-th row of mixing corresponds to the particle with i-th mass, while the
-        first (second) column corresponds to slep_L (slep_R).
-        """
-
+        # type: (Tuple[float, float], float, Matrix) -> None
         self.mass = mass
         self.snu = snu
         self.mixing = mixing
@@ -63,18 +62,20 @@ class SleptonProperty:
 
 
 class Arxiv08081530:
+    """Equations in arXiv:0808.1530."""
+
     @staticmethod
     def __is_close(*v: float) -> bool:
         return abs(1 - min(v) / max(v)) < 1e-4
 
     @staticmethod
     def i_abc(a: float, b: float, c: float) -> float:
-        """Special function Eq. (7) of arXiv:0808.1530."""
+        """Return Eq (7) of arXiv:0808.1530."""
         return Arxiv08081530.i2abc(a * a, b * b, c * c)
 
     @staticmethod
     def i2abc(a: float, b: float, c: float) -> float:
-        """Special function Eq. (7) (squared version) of arXiv:0808.1530."""
+        """Return Eq (7) (squared version) of arXiv:0808.1530."""
         if Arxiv08081530.__is_close(a, b, c):
             return Arxiv08081530.__i2aaa(a, b, c)
         elif Arxiv08081530.__is_close(a, b):
@@ -107,7 +108,7 @@ class Arxiv08081530:
 
     @staticmethod
     def calc_m1sq_m2sq(m2: float, mu: float, mw: float) -> Tuple[float, float]:
-        """Return M1^2 and M2^2 of Eq. (9) of arXiv:0808.1530."""
+        """Return M1^2 and M2^2 of Eq (9) of arXiv:0808.1530."""
         product = m2 * m2 * mu * mu  # this is m1^2 * m2^2
         tmp = m2 * m2 + mu * mu + 2 * mw * mw
         m2sq = 0.5 * (tmp + sqrt(tmp * tmp - 4 * product))
@@ -138,14 +139,14 @@ class Calculator(simsusy.mssm.tree_calculator.Calculator):
     def __get_slepton_property_each(self):
         # type: ()->Tuple[SleptonProperty, SleptonProperty, SleptonProperty]
         """Return slepton property for each flavor."""
-        pids = [1000011, 1000013, 1000015, 2000011, 2000013, 2000015]
-        order = self._get_mixing_order_flavor("SELMIX", pids, (True, True, True))
-        masses = [self.output.mass_assert(pids[order[i]]) for i in range(6)]
-        mixing = self.output.get_complex_matrix_assert("SELMIX")[order]
+        self._output_reorder_sfermion_in_flavor(SMIX.L, (True, True, True))
+        masses = [self.output.mass(pid) for pid in SMIX.L.pids]
+        mixing = self.output.get_complex_matrix(SMIX.L.slha2mix)
+        self._output_reorder_sfermion_in_mass(SMIX.L)
 
-        snu_pids = [1000012, 1000014, 1000016]
-        snu_order = self._get_mixing_order_flavor("SNUMIX", snu_pids)
-        snu_masses = [self.output.mass_assert(snu_pids[snu_order[i]]) for i in range(3)]
+        self._output_reorder_sfermion_in_flavor(SMIX.N, (True, True, True))
+        snu_masses = [self.output.mass(pid) for pid in SMIX.N.pids]
+        self._output_reorder_sfermion_in_mass(SMIX.N)
         return (
             SleptonProperty((masses[0], masses[3]), snu_masses[0], mixing[0::3, 0::3]),
             SleptonProperty((masses[1], masses[4]), snu_masses[1], mixing[1::3, 1::3]),
@@ -162,17 +163,17 @@ class Calculator(simsusy.mssm.tree_calculator.Calculator):
         assert self.output.sm is not None
         assert self.output.ewsb is not None
         mw = self.output.sm.mass(24)
-        mu = self.output.get_float_assert("HMIX", 1)
-        tb = self.output.get_float_assert("HMIX", 2)
-        vv = self.output.get_float_assert("HMIX", 3)
-        m1 = self.output.get_float_assert("MSOFT", 1)
-        m2 = self.output.get_float_assert("MSOFT", 2)
-        gysq = pow2(self.output.get_float_assert("GAUGE", 1))
-        g2sq = pow2(self.output.get_float_assert("GAUGE", 2))
+        mu = self.output.get_float("HMIX", 1)
+        tb = self.output.get_float("HMIX", 2)
+        vv = self.output.get_float("HMIX", 3)
+        m1 = self.output.get_float("MSOFT", 1)
+        m2 = self.output.get_float("MSOFT", 2)
+        gysq = pow2(self.output.get_float("GAUGE", 1))
+        g2sq = pow2(self.output.get_float("GAUGE", 2))
         scale_sq = [
             sqrt(
-                self.output.get_float_assert("MSL2", f, f)
-                * self.output.get_float_assert("MSE2", f, f)
+                self.output.get_float("MSL2", f, f)
+                * self.output.get_float("MSE2", f, f)
             )
             for f in range(1, 4)
         ]
@@ -180,7 +181,7 @@ class Calculator(simsusy.mssm.tree_calculator.Calculator):
         m_leptons = self.output.sm.mass_e()
         vd = vv / sqrt(2) * tan2cos(tb)
         y0 = [m / vd for m in m_leptons]
-        yl = [self.output.get_float_assert("YE", i, i) for i in [1, 2, 3]]
+        yl = [self.output.get_float("YE", i, i) for i in [1, 2, 3]]
 
         if exclude_wino:
             g2sq = 0  # to exclude wino-contribution automatically
@@ -200,9 +201,9 @@ class Calculator(simsusy.mssm.tree_calculator.Calculator):
                     - (gysq * m1) * Arxiv08081530.i_abc(m1, msl, msr)
                 )
             return (delta_l[0], delta_l[1], delta_l[2])
-        char = [self.output.mass_assert(p) for p in (1000024, 1000037)]
-        umix = self.output.get_complex_matrix_assert("UMIX")
-        vmix = self.output.get_complex_matrix_assert("VMIX")
+        char = [self.output.mass(p) for p in (1000024, 1000037)]
+        umix = self.output.get_complex_matrix("UMIX")
+        vmix = self.output.get_complex_matrix("VMIX")
         n_matrix = self._neutralino_matrix()
         if exclude_wino:
             n_matrix = np.delete(np.delete(n_matrix, 1, axis=0), 1, axis=1)
@@ -254,16 +255,15 @@ class Calculator(simsusy.mssm.tree_calculator.Calculator):
         mu = self.output.ewsb.mu
         tan_beta = self.output.ewsb.tan_beta
         assert isinstance(mu, float)
-        assert isinstance(tan_beta, float)
         mz = self.output.sm.mz()
         vd = self.output.sm.vev() * tan2cos(tan_beta) / sqrt(2)
         mf_mat = np.diag(self.output.sm.mass_e())
         mz2_cos2b = np.diag([1, 1, 1]) * pow2(mz) * tan2costwo(tan_beta)
         sw2 = self.output.sm.sin_w_sq()
         mu_tan_b = mu * self.output.ewsb.tan_beta
-        msl2 = self.output.get_matrix_assert("MSL2")
-        msr2 = self.output.get_matrix_assert("MSE2")
-        t = self.output.get_matrix_assert("TE")
+        msl2 = self.output.get_complex_matrix("MSL2")
+        msr2 = self.output.get_complex_matrix("MSE2")
+        t = self.output.get_complex_matrix("TE")
 
         def m_join(m11: T, m12: T, m21: T, m22: T) -> T:
             return np.vstack([np.hstack([m11, m12]), np.hstack([m21, m22])])
@@ -292,25 +292,13 @@ class Calculator(simsusy.mssm.tree_calculator.Calculator):
                 self.output.slha["YE"].comment[i + 1, i + 1] = f"delta = {delta:.6f}"
                 self.output.slha["YE", i + 1, i + 1] = mf_mat[i, i] / (1 + delta) / vd
 
-        for i in range(4):
+        for _ in range(4):
             delta_l = self.__slepton_delta_l(
                 large_tan_beta_limit=False, exclude_wino=True
             )
             update(delta_l)
-        self._chop_mixing_matrix("SELMIX")
 
     def write_output(self, filename=None, slha1=False):
         # type: (Optional[str], bool)->None
         """Write output to file."""
-        pid_base = [1000001, 1000003, 1000005, 2000001, 2000003, 2000005]
-        pid_snu = [1000012, 1000014, 1000016]
-        self._reorder_mixing_matrix_in_flavor("DSQMIX", pid_base)
-        self._reorder_mixing_matrix_in_flavor("USQMIX", [p + 1 for p in pid_base])
-        self._reorder_mixing_matrix_in_flavor("SELMIX", [p + 10 for p in pid_base])
-        self._reorder_mixing_matrix_in_flavor("SNUMIX", pid_snu)
-        self._chop_mixing_matrix("DSQMIX")
-        self._chop_mixing_matrix("USQMIX")
-        self._chop_mixing_matrix("SELMIX")
-        self._chop_mixing_matrix("SNUMIX")
-
         super().write_output(filename, slha1)

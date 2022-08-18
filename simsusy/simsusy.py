@@ -112,7 +112,7 @@ def run(context, calculator, input, output, v1):  # noqa: A002
     calculators = Calculators()
     guessed_calculator = calculators.guess(calculator)
     if guessed_calculator is None:
-        logger.error('calculator "%s" not found.')
+        logger.error('calculator "%s" not found.', calculator)
         logger.info("Available calculators are:")
         max_length = max(len(name) for name in calculators.keys())
         for name in calculators.keys():

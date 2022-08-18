@@ -37,6 +37,8 @@ class AbsCalculator:
         output path, and thus this method accepts those values.
         """
         self._output_prepare_spinfo()
+        if "SIMSUSY" in self.blocks:
+            del self.slha["SIMSUSY"]
         self.output.write(filename)
 
     def calculate(self) -> None:
