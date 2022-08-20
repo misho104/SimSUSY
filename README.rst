@@ -9,10 +9,9 @@ A simple example is:
 
 .. code-block:: shell
 
-   simsusy run -c mssm.tree_calculator input.SLHA
+   simsusy run mssm.tree_calculator input.slha
 
-where ``input.slha`` is a proper input file.
-Note that **calculator is specified by hand**, or should be specified in ``SIMSUSY`` block of the input file.
+where ``input.slha`` is a proper input file and **calculator is specified by hand** as the command-line argument.
 
 Remarks / Policies
 ------------------
