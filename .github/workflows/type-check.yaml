@@ -35,6 +35,7 @@ jobs:
         id: run
         run: |
           source $VENV
+          mypy --install-types
           mypy -p simsusy --junit-xml=mypy_${PYTHON}.xml
         continue-on-error: true
       - name: Upload results

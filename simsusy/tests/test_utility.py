@@ -113,8 +113,8 @@ class TestUtility(unittest.TestCase):
         self.assertAlmostEqual(0, u.tan2sintwo(0))
 
     def test_chop_matrix(self):
-        r = 1e-12
-        i = 1e-12j
+        r = 1e-18
+        i = 1e-18j
         # remove off-diagonal small elements
         self.assert_matrix_equal(
             u.chop_matrix(np.array([[1, r, i], [i, 2, r], [r, i, -4j + i]])),

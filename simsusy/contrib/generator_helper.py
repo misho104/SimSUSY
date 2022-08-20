@@ -201,7 +201,7 @@ ufo_model  = ""   # path to UFO model directory
         # micrOMEGAs needs full path
         if isinstance(slha1, SLHA):
             with TempSLHA(slha1) as f:
-                command = [path[1], f.resolve()]
+                command = [path[1], f.path.expanduser().resolve()]
                 _, output = self.run_process(command, cwd=path[0])
         else:
             command = [path[1], pathlib.Path(slha1).resolve()]
