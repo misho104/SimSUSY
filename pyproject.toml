@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "simsusy"
-version = "0.3.0"
+version = "0.4.0"
 description = "A Python package for simple SUSY spectrum calculation"
 authors = ["Sho Iwamoto (Misho) <webmaster@misho-web.com>"]
 license = "Apache 2.0"
@@ -19,13 +19,12 @@ yaslha = "^0.3.3"
 pytest = "^7.1"
 pytest-cov = "^3.0"
 mypy = "^0.961"
-flake8 = "^4.0"
+flake8 = "^5.0"
 flake8-builtins = "^1.5"
-flake8-commas = "^2.1"
 flake8-comprehensions = "^3.10"
 flake8-docstrings = "^1.6"
 flake8-isort = "^4.1"
-flake8-logging-format = "^0.6.0"
+flake8-logging-format = "^0.7.0"
 pep8-naming = "^0.13"
 
 [tool.poetry.scripts]
